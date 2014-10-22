@@ -1,8 +1,54 @@
 <# 
  the script to call to migrate docbase
- it accepts the following parameters:
- 
+ it accepts the following parameters: 
+#>
+
+<#
+ creates an object with a dump() method that displays as json object
  #>
+function createObj ()
+{
+ $obj = @{}
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name dump -Value {
+  .{
+   $result = (_DumpObjAt $this '') + [Environment]::NewLine
+   return $result
+  } @args
+ } -Passthru
+ return $obj
+}
+
+<#
+ creates an object with a dump() method that displays as json object, 
+ a resolve($key) that resolves the key value replacing any ${xx} with 
+ resolved value and a show() method that displays the list of all resolved 
+ properties
+ #>
+function createDynaObj ()
+{
+ $obj = createObj
+
+ # adds both methods: resolve ($key) and show ()
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name resolve -Value {
+ .{
+   param (
+    [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$key
+   )
+   $value = Resolve $this $key
+   return ResolveValue $this $value
+  } @args
+ } -Passthru
+ # adds method 'show'
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name show -Value {
+  .{
+   $result = (_showResolved $this $this '')
+   return $result
+  } @args
+ } -Passthru
+ return $obj
+}
 
 <#
  the function that returns the object matching the . (dot) separated value in the 
@@ -26,11 +72,84 @@ function GetObjOf ($obj, $name, $create)
  if ($true -eq $create)
  {
   # ok: adds a new object to the supplied object
-  $sub = @{}
+  $sub = createObj
   $obj.($name) = $sub
   return $sub;
  }
  throw "there is no object for key $name"
+}
+
+<#
+ unencrypts a ...'crypted' password
+ #>
+<#
+function _decrypt ($crypt)
+{
+ $tmp = convertfrom-securestring $crypt
+ $decrypt = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR( (convertto-securestring $tmp) ))
+ return $decrypt
+}
+#>
+
+<#
+ the method that checks at the password for a user
+ #>
+function checkPassword ($user, $domain, $pwd)
+{
+ add-type -AssemblyName System.DirectoryServices.AccountManagement
+ $machine = (get-childitem -path env:computername).value
+ if ($machine -eq $domain)
+ {
+  $ct = [System.DirectoryServices.AccountManagement.ContextType]::Machine
+ }
+ else
+ {
+  $ct = [System.DirectoryServices.AccountManagement.ContextType]::Domain
+ }
+ $cred = new-object System.Management.Automation.PSCredential $user, $pwd
+ $nc = $cred.GetNetworkCredential()
+ $pc = new-object System.DirectoryServices.AccountManagement.PrincipalContext $ct
+ try
+ {
+  return $pc.validatecredentials($nc.username, $nc.password)
+ }
+ finally
+ {
+  $pc.dispose()
+ }
+}
+
+<#
+ the method that reads the password for a given user
+ #>
+function readPwd ($domain, $user)
+{
+ try
+ {
+  $msg = 'enter password for user ' + $domain + '\' + $user + ' (empty to cancels): '
+  $msg2 = 'wrong password.\n' + $msg
+  $pwd = ''
+  while (0 -eq $pwd.length)
+  {
+   $pwd = read-host -assecurestring $msg
+   # TODO: should check then
+   if (0 -lt $pwd.Length)
+   {
+    if (!(checkPassword $user $domain $pwd))
+    {
+     $msg = $msg2
+     $pwd = ''
+    }
+   }
+  }
+  return $pwd
+ }
+ catch
+ {
+  write-host ($_.exception)
+  return $null
+ }
+ 
 }
 
 <#
@@ -477,19 +596,6 @@ function _showResolved ($top, $obj, $name)
  return $show
 }
 
-
-function createObj ()
-{
- $obj = @{}
- $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name dump -Value {
-  .{
-   $result = (_DumpObjAt $this '') + [Environment]::NewLine
-   return $result
-  } @args
- } -Passthru
- return $obj
-}
-
 <# 
  the function that returns a new object holding data for a server.ini 
  representation.
@@ -523,56 +629,57 @@ function getServerIni ($name, $path)
  It contains all defaults to use
  @ini: the alias for server.INI
  @env: the alias for environment variables
- @obj: the alias for current object
- @file: the alias for files
+ @db the alias for docbase in the object to return
+ @return: the created object with dynamic resolution
  #>
-function createDocbaseProps ($ini, $env, $docbase)
+function createDocbaseProps ($ini, $env, $db)
 {
- $obj = createObj
- $obj.auth = '${'+ $env + '.USERDOMAIN}'
- $obj.config = '${' + $ini + '.SERVER_STARTUP.server_config_name}'
- $obj.database = '${' + $ini + '.SERVER_STARTUP.database_name}'
- $obj.dsn = '${' + $ini + '.SERVER_STARTUP.database_conn}'
- $obj.id = '${' + $ini + '.SERVER_STARTUP.docbase_id}'
- $obj.name = '${' + $ini + '.SERVER_STARTUP.docbase_name}'
- $obj.pwd = 'demo.demo'
- $obj.rdbms = 'SQLServer'
- $obj.service = '${' + $ini + '.SERVER_STARTUP.service}'
- $obj.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
+ $docbase = createObj
+ $docbase.auth = '${'+ $env + '.USERDOMAIN}'
+ $docbase.config = '${' + $ini + '.SERVER_STARTUP.server_config_name}'
+ $docbase.database = '${' + $ini + '.SERVER_STARTUP.database_name}'
+ $docbase.dsn = '${' + $ini + '.SERVER_STARTUP.database_conn}'
+ $docbase.id = '${' + $ini + '.SERVER_STARTUP.docbase_id}'
+ $docbase.name = '${' + $ini + '.SERVER_STARTUP.docbase_name}'
+ $docbase.pwd = 'demo.demo'
+ $docbase.rdbms = 'SQLServer'
+ $docbase.service = '${' + $ini + '.SERVER_STARTUP.service}'
+ $docbase.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
 
- $obj.previous = @{}
- $obj.previous.install = @{}
- $obj.previous.install.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
- $obj.previous.version = '6.5.SP3'
+ $docbase.previous = createObj
+ $docbase.previous.install = createObj
+ $docbase.previous.install.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
+ $docbase.previous.version = '6.5.SP3'
 
- $obj.daemon = @{}
- $obj.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
- $obj.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
- $obj.daemon.ini = 
-  '${' + $env + '.DOCUMENTUM}\dba\config\${' + $docbase + '.name}\server.ini'
- $obj.daemon.logname = '${' + $docbase + '.name}.log'
- $obj.daemon.log = 
-  '${' + $env + '.DOCUMENTUM}\dba\log\${' + $docbase + '.daemon.logname}'
+ $docbase.daemon = @{}
+ $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
+ $docbase.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
+ $docbase.daemon.ini = 
+  '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}\server.ini'
+ $docbase.daemon.logname = '${' + $db + '.name}.log'
+ $docbase.daemon.log = 
+  '${' + $env + '.DOCUMENTUM}\dba\log\${' + $db + '.daemon.logname}'
  
- $obj.daemon.cmd = '"${' + $env + '.DM_HOME}\bin\documentum.exe "' + 
-  '-docbase_name "${' + $docbase + '.name}" ' + 
+ $docbase.daemon.cmd = '"${' + $env + '.DM_HOME}\bin\documentum.exe "' + 
+  '-docbase_name "${' + $db + '.name}" ' + 
   '-security acl ' + 
-  '-init_file "${' + $docbase + '.daemon.ini}" ' + 
+  '-init_file "${' + $db + '.daemon.ini}" ' + 
   '-run_as_service ' + 
   '-install_owner "${' + $env + '.USERNAME}" ' + 
-  '-logfile "${' + $docbase + '.daemon.log}"'
+  '-logfile "${' + $db + '.daemon.log}"'
 
- $obj.docbroker = @{}
- $obj.docbroker.host = '${' + $env + '.COMPUTERNAME}'
- $obj.docbroker.port = 1489
+ $docbase.docbroker = createObj
+ $docbase.docbroker.host = '${' + $env + '.COMPUTERNAME}'
+ $docbase.docbroker.port = 1489
+ $obj = createDynaObj
+ $obj.($db) = $docbase
  return $obj
 }
 
-function GetDocbaseProps ($ini, $env, $obj, $path)
+function GetDocbaseProps ($obj, $path)
 {
- $docbase = createDocbaseProps $ini $env $obj
- LoadPropertiesFile $docbase $path
- return $docbase
+ LoadPropertiesFile $obj $path | out-null
+ return $obj
 }
 
 function GetEnvironment ()
@@ -583,32 +690,6 @@ function GetEnvironment ()
   $env.($item.key) = $item.value
  }
  return $env
-}
-
-function createDynaObj ()
-{
- $obj = createObj
-
- # adds both methods: resolve ($key) and show ()
- $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name resolve -Value {
- .{
-   param (
-    [Parameter(Mandatory=$true)]
-    [ValidateNotNullOrEmpty()]
-    [string]$key
-   )
-   $value = Resolve $this $key
-   return ResolveValue $this $value
-  } @args
- } -Passthru
- # adds method 'show'
- $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name show -Value {
-  .{
-   $result = (_showResolved $this $this '')
-   return $result
-  } @args
- } -Passthru
- return $obj
 }
 
 <#
@@ -637,18 +718,16 @@ function Initialize ($path)
 
  # loads the environment variables
  $env = getEnvironment
- 
+
  # loads the server.ini into an object
  $ini = getServerIni 'ini' $file.server_ini
  # loads the migration stuff as well
- $docbase = getDocbaseProps 'ini' 'env' 'docbase' $file.migrate
-
- $obj = createDynaObj
- $obj.env = $env
- $obj.file = $file
- $obj.ini = $ini
- $obj.docbase = $docbase
- return $obj
+ $docbase = createDocbaseProps 'ini' 'env' 'docbase'
+ $docbase.env = $env
+ $docbase.file = $file
+ $docbase.ini = $ini
+ $docbase = getDocbaseProps $docbase $file.migrate
+ return $docbase
 }
 
 <# ODBC/SQL related methods #>
@@ -773,13 +852,6 @@ function checkObj ($obj)
 
 function checkEnv ($obj)
 {
-<#
-- make sure there i can connect to ${cfg.docbase.dsn} in database ${cfg.docbase.database} with 
-  login ${cfg.docbase.user} using password ${cfg.docbase.pwd} 
-  and: SELECT r_object_id, docbase_id FROM dm_docbase_config_sv WHERE i_hasfolder = 1 AND object_name = '${cfg.docbase.name}'   
-  returns 1 line only with docbase_id matching ${cfg.docbase.id}.
-  ${cfg.docbase.hexid} is set to SUBSTR (r_object_id, 2, 8)
-#>
  # make sure there is no directory ${cfg.env.documentum}\dba\config\${cfg.docbase.name}
  $val = $obj.resolve('env.DOCUMENTUM') + '\dba\config\' + $obj.resolve('docbase.name')
  if (test-path $val)
@@ -813,7 +885,7 @@ function checkEnv ($obj)
    ' (at line ' + $val[0].linenumber + ')'
  }
  # make sure there is an DSN named ${cfg.docbase.dsn}
- $val = 'HKLM:\Software\ODBC\ODBC.INI\ODBC Data Sources\' + $obj.resolve('docbase.dsn')
+ $val = 'HKLM:\Software\ODBC\ODBC.INI\' + $obj.resolve('docbase.dsn')
  if (!(test-path $val))
  {
   throw 'ODBC source ''' + $obj.resolve('docbase.dsn') + ''' for docbase ''' + 
@@ -826,7 +898,20 @@ function checkEnv ($obj)
  {
   throw 'a service named ' + $obj.resolve('docbase.daemon.name') + ' already exists'
  }
- <#
+ # make sure we have a docbase.dsn, docbase.user and docbase.pwd
+ if (!$obj.resolve('docbase.dsn'))
+ {
+  throw 'missing docbase.dsn property'
+ }
+ if (!$obj.resolve('docbase.user'))
+ {
+  throw 'missing docbase.user property'
+ }
+ if (!$obj.resolve('docbase.pwd'))
+ {
+  throw 'missing docbase.pwd property'
+ }
+ <# this is currently comemnted as i don't have the docbroker yet
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
  $val = & 'dmqdocbroker'  '-t',$obj.resolve('docbase.docbroker.host'),'-p',$obj.resolve('docbase.docbroker.port'),'-c','ping' 2>&1 | select-string -pattern '^Successful reply from docbroker at host'
  if ((!$val) -or (0 -eq $val.length))
@@ -850,12 +935,65 @@ function checkEnv ($obj)
  return $obj
 }
 
+function checkDB ($obj)
+{
+ $cnx = GetConnect $obj.resolve('docbase.dsn') $obj.resolve('docbase.user') $obj.resolve('docbase.pwd')
+ try
+ {
+  write-host ('connected...')
+<#
+- make sure there i can connect to $obj.docbase.dsn (in database $obj.docbase.database ?) with 
+  login $obj.docbase.user using password $obj.docbase.pwd 
+  and: SELECT r_object_id, docbase_id FROM dm_docbase_config_sv WHERE i_hasfolder = 1 AND object_name = '${cfg.docbase.name}'   
+  returns 1 line only with docbase_id matching ${cfg.docbase.id}.
+  ${cfg.docbase.hexid} is set to SUBSTR (r_object_id, 2, 8)
+#>
+  # make sure there is a config matching the docbase name and id
+  $sql = 'SELECT r_object_id, r_docbase_id FROM dm_docbase_config_sv ' + 
+   'WHERE i_has_folder = 1 AND object_name = ''' + $obj.resolve('docbase.name') +''''
+  $table = selectTable $cnx $sql
+  if (0 -eq $table.rows.count)
+  {
+   throw 'cannot locate docbase config for docbase ' + 
+    $obj.resolve('docbase.name') + 
+    ': are we accessing it through the correct database dsn (' + 
+    $obj.resolve('docbase.dsn') + ')?'
+  }
+  elseif (1 -lt $table.rows.count)
+  {
+   throw 'too many (' + $table.rows.count + ') docbase configs for docbase ' + 
+    $obj.resolve('docbase.name')
+  }
+  else
+  {
+   $id = $table.rows[0].r_docbase_id
+   if ($obj.resolve('docbase.id') -ne $id)
+   {
+    throw 'unexpected docbase id (' + $id + ') found in database for docbase ' + 
+     $obj.resolve('docbase.name') + ': expected ' + $obj.resolve('docbase.id')
+   }
+  }
+  # saves the hexid: 6 digits representation
+  [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
+  $hex = $val.ToString('x6')
+  $obj.docbase.hexid = $hex
+
+ }
+ finally
+ {
+  $cnx.Close()
+ }
+ return $obj;
+}
+
 function check ($obj)
 {
  # checks at the meta-data
  $obj = checkObj $obj
  # check at the environment
  $obj = checkEnv $obj
+ # check against db
+ $obj = checkDB $obj
  return $obj
 }
 
@@ -904,24 +1042,22 @@ else
 {
  $path = $pwd.ToString()
 }
-# change it for the test
-#$path = 'C:\Users\nguyed1\Documents\sample1'
 
 write-host ('current path: ' + $path)
 
 # 2: initialize the environment
 $obj = Initialize $path
-$obj.docbase.rdbms = 'SQLServer'
-if (! $obj.env.Contains('DOCUMENTUM'))
-{
- $obj.env.DOCUMENTUM = '${env.HOMEDRIVE}${env.HOMEPATH}\Documents\Documentum'
-}
-if (! $obj.env.Contains('DM_HOME'))
-{
- $obj.env.DM_HOME = '${env.DOCUMENTUM}\prog\7.1'
-}
 
-# 3: make sure the environment seems OK
+# 3: current current user's pwd
+$pwd = readPwd $obj.env.USERDOMAIN $obj.env.USERNAME
+if ($null -eq $pwd)
+{
+ return
+}
+# (pseudo-encrypted) password is stored in the object then ...
+$obj.pwd = $pwd
+
+# 4: make sure the environment seems OK
 $obj = check $obj
 
 # that's just for playing ....
@@ -935,12 +1071,12 @@ write-host ('-----------')
 write-host ('>' + $obj.resolve('docbase.id') + '<')
 write-host ('>' + $obj.docbase.daemon.cmd + '<')
 write-host ('>' + $obj.resolve('docbase.daemon.cmd') + '<')
-write-host ('>' + $obj.resolve('docbase.toto.titi.tutu') + '<')
 #showResolved $obj $obj ''
 #'docbase.daemon.cmd: >' + $obj.docbase.daemon.cmd + '<'
 #'resolved.docbase.daemon.cmd: >' + $obj.resolve('docbase.daemon.cmd') + '<'
 
-$cnx = GetConnect 'db1' 'postgres' 'password'
+#$cnx = GetConnect 'db1' 'postgres' 'password'
+<#$cnx = GetConnect $obj.resolve('docbase.dsn') $obj.resolve('docbase.user') $obj.resolve('docbase.pwd')
 try
 {
  write-host ('connected...')
@@ -970,9 +1106,8 @@ try
  }
  write-host 'done'
 }
-
 finally
 {
  $cnx.Close()
  $cnx = $null
-}
+}#>
