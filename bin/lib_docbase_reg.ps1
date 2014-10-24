@@ -1,4 +1,7 @@
-﻿function Write-DocbaseRegKey( $obj)
+﻿<#
+    Creates the registry key and entries related to the docbase
+#>
+function Write-DocbaseRegKey( $obj)
 {
     if ($null -eq $obj)
     {
@@ -23,6 +26,9 @@
     }    
 }
 
+<#
+    Creates a new Windows service for the docbase
+#>
 function New-DocbaseService($obj)
 {
     if ($null -eq $obj)
@@ -42,6 +48,9 @@ function New-DocbaseService($obj)
     Write-Output "Docbase service $($obj.name) successfully created."
 }
 
+<#
+    Tests whether or not a new Windows service for the docbase already exists
+#>
 function Test-DocbaseService($name)
 {
     if ($null -eq $name)
@@ -53,7 +62,24 @@ function Test-DocbaseService($name)
     {
         return $false
     }
-    return $true
-   
+    return $true   
 }
 
+
+<#
+    Returns the max port number used in the \etc\services file.
+#>
+function Get-MaxTcpPort($Path)
+{    
+    $regEx = '(?i)(?<svcname>[#\w\d]+)\s*(?<svcport>[0-9]+)\/tcp'
+    $text = Get-Content $Path -Raw
+    [Uint16]$maxTcpPort = 0
+    foreach ($m in [regex]::Matches($text, $regEx))
+    {
+        if ((-not $m.Groups['svcname'].Value.StartsWith('#')) -and ([uint16]::Parse($m.Groups['svcport'].Value) -gt $maxTcpPort))
+        {
+            $maxTcpPort = $m.Groups['svcport'].Value
+        }
+    }
+    return $maxTcpPort
+}

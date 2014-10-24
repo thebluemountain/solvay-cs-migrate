@@ -46,6 +46,31 @@ function createDynaObj ()
    return $result
   } @args
  } -Passthru
+
+  # adds method 'ToDocbaseRegistry'
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDocbaseRegistry -Value {
+  .{
+   $result = (asDocbaseRegistry $this $this '')
+   return $result
+  } @args
+ } -Passthru
+
+  # adds method 'ToDocbaseService'
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDocbaseService -Value {
+  .{
+   $result = (asDocbaseService $this $this '')
+   return $result
+  } @args
+ } -Passthru
+
+   # adds method 'ToDbConnectionString'
+ $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDbConnectionString -Value {
+  .{
+   $result = (asDbConnectionString $this $this '')
+   return $result
+  } @args
+ } -Passthru
+
  return $obj
 }
 
@@ -888,7 +913,7 @@ function checkEnv ($obj)
 
 function checkDB ($obj)
 {
- $cnx = GetConnect $obj.resolve('docbase.dsn') $obj.resolve('docbase.user') $obj.resolve('docbase.pwd')
+ $cnx = New-Connection $obj.ToDbConnectionString()
  try
  {
   write-host ('connected...')
@@ -902,7 +927,7 @@ function checkDB ($obj)
   # make sure there is a config matching the docbase name and id
   $sql = 'SELECT r_object_id, r_docbase_id FROM dm_docbase_config_sv ' + 
    'WHERE i_has_folder = 1 AND object_name = ''' + $obj.resolve('docbase.name') +''''
-  $table = selectTable $cnx $sql
+  $table = Select-Table $cnx $sql
   if (0 -eq $table.rows.count)
   {
    throw 'cannot locate docbase config for docbase ' + 
@@ -1001,6 +1026,32 @@ function asDocbaseService($obj)
     return $svc
 }
 
+<#
 
+#>
+function asDbConnectionString($obj)
+{
+    $cnxstring = 'dsn=' + $obj.resolve('docbase.dsn') + ';uid=' + $obj.resolve('docbase.user') + ';pwd=' + $obj.resolve('docbase.pwd')    
+    return $cnxstring
+}
 
+$iniClassSrc = "
+    public class IniFile
+    {
+        [System.Runtime.InteropServices.DllImport(""kernel32"")]
+        private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
+        [System.Runtime.InteropServices.DllImport(""kernel32"")]
+        private static extern int GetPrivateProfileString(string section, string key, string def, System.Text.StringBuilder retVal, int size, string filePath);
+        public static void WriteValue(string path, string Section, string Key, string Value)
+        {
+            WritePrivateProfileString(Section, Key, Value, path);
+        }
+        public static string ReadValue(string path, string Section, string Key)
+        {
+            var temp = new System.Text.StringBuilder(255);
+            int i = GetPrivateProfileString(Section, Key, """", temp, 255, path);
+            return temp.ToString();
+        }
+    }"
+Add-Type -TypeDefinition $iniClassSrc 
 
