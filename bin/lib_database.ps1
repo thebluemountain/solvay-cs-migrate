@@ -20,8 +20,9 @@ function New-Connection ($cnxString)
  the method that retrieves results matching the supplied SQL (select) query
  @returns: the first returned (data)table
  #>
-function Select-Table ($cnx, $sql)
+function Select-Table ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {
+    Write-Verbose "Select-Table - SQL Statement: $sql"
     $da = new-object System.Data.Odbc.OdbcDataAdapter $sql,$cnx
     try
     {
@@ -42,20 +43,28 @@ function Select-Table ($cnx, $sql)
     For UPDATE, INSERT, and DELETE statements, the return value is the number of rows affected 
     by the command. For all other types of statements, the return value is -1.
 #>
-function Execute-SQL ($connection, $sql)
+function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {       
-   [System.Data.Odbc.OdbcConnection] $cnx = New-Connection $cnxString
-    try
-    {
-        Write-Verbose "Executing SQL Statement: $sql"
-        $command = $cnx.CreateCommand()
-        $command.CommandText  = $sql
-        $count = $command.ExecuteNonQuery()
-        Write-Verbose "$count row(s) affected"
-        return $count
-    }
-    finally
-    {
-        $cnx.Close()
-    }
+    Write-Verbose "Execute-NonQuery - SQL Statement: $sql"
+    $command = $cnx.CreateCommand()
+    $command.CommandText  = $sql
+    $count = $command.ExecuteNonQuery()
+    Write-Verbose "$count row(s) affected"
+    return $count
+}
+
+
+<# 
+    Executes an SQL statement against the Connection and returns the number of rows affected.
+    For UPDATE, INSERT, and DELETE statements, the return value is the number of rows affected 
+    by the command. For all other types of statements, the return value is -1.
+#>
+function Execute-Scalar ($cnx, $sql)
+{  
+    Write-Verbose "Execute-Scalar - SQL Statement: $sql"
+    $command = $cnx.CreateCommand()
+    $command.CommandText  = $sql
+    $result = $command.ExecuteScalar()
+    Write-Verbose "Result = $result"
+    return $result  
 }

@@ -83,3 +83,46 @@ function Get-MaxTcpPort($Path)
     }
     return $maxTcpPort
 }
+
+
+function Test-InstallOwnerChanged($cfg)
+{
+    if ($cfg.env.USERNAME -eq $cfg.resolve('docbase.previous.install.name'))
+    {
+        $cnx = New-Connection $cfg.ToDbConnectionString()
+        try
+        {
+            $previousUser = $cfg.resolve('docbase.previous.install.name')
+            $query = "SELECT user_login_domain, user_source, user_privileges FROM dm_user_s WHERE user_login_name = '$previousUser'"
+            [System.Data.DataTable] $result = Select-Table -cnx $cnx -sql $query
+            if ($result.Rows.Count -ne 1) {
+                 throw "Failed to find user $previousUser in table dm_user_s"     
+            }
+            $row = $result.Rows[0]
+            if ($row['user_privileges'] -ne 16) {
+                throw "Previous install owner '$previousUser' does not appear to be a superuser"
+            }                       
+            if ($row['user_source'] -ne ' ')            {
+                throw "Invalid user source for previous install owner: '$($row['user_source'])'"
+            }
+            if ($row['user_login_domain'] -ne  $cfg.env.USERDOMAIN) {
+               return [InstallOwnerChanges]::None
+            }
+            return [InstallOwnerChanges]::Domain
+        }
+        finally
+        {
+            $cnx.close()
+        }
+    }
+    return [InstallOwnerChanges]::Name
+}
+
+Add-Type -TypeDefinition "
+   public enum InstallOwnerChanges
+   {
+      None,
+      Name,
+      Domain,
+   }
+"

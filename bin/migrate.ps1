@@ -124,6 +124,12 @@ try
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_NAME", $cfg.resolve('docbase.database'))
     
+    # 3- modifying installation to allow for starting in new environment
+    # 3.1- managing the install owner name change
+    $installOwnerChanged = Test-InstallOwnerChanged($cfg)
+
+    Write-Output "Install Owner changed?: $installOwnerChanged"
+ 
 
 
  } 
