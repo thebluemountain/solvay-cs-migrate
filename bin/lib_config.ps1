@@ -729,7 +729,7 @@ function Initialize ($path)
  $file.server_ini = $path + '\server.ini'
  $file.dbpasswd_txt = $path + '\dbpasswd.txt'
  $file.migrate = $path + '\migrate.properties'
- $file.services = '${env.WINDIR}\System32\Drivers\etc\services.'
+ $file.services = '${env.WINDIR}\System32\Drivers\etc\services'
 
  # loads the environment variables
  $env = getEnvironment
@@ -839,10 +839,10 @@ function checkEnv ($obj)
  # make sure there is no registry entry 
  # HKEY_LOCAL_MACHINE\SOFTWARE\Documentum\DOCBASES\${cfg.docbase.name} 
  $val = 'HKLM:\Software\Documentum\DOCBASES'
- if (!(test-path $val))
- {
-  throw 'registry key ''' + $val + ''' for documentum docbases does not exist'
- }
+ #if (!(test-path $val))
+ #{
+ # throw 'registry key ''' + $val + ''' for documentum docbases does not exist'
+ #}
  $val += '\' + $obj.resolve('docbase.name')
  if (test-path $val)
  {

@@ -39,16 +39,7 @@ try
     Write-Output "Configuration path: $configPath"
 
     # 2: initialize the environment
-    $cfg = Initialize $configPath
-    $cfg.docbase.rdbms = 'SQLServer'
-    if (! $cfg.env.Contains('DOCUMENTUM'))
-    {
-     $cfg.env.DOCUMENTUM = '${env.HOMEDRIVE}${env.HOMEPATH}\Documents\Documentum'
-    }
-    if (! $cfg.env.Contains('DM_HOME'))
-    {
-     $cfg.env.DM_HOME = '${env.DOCUMENTUM}\prog\7.1'
-    }
+    $cfg = Initialize $configPath    
 
     # 3: current current user's pwd
     $pwd = readPwd $cfg.env.USERDOMAIN $cfg.env.USERNAME
