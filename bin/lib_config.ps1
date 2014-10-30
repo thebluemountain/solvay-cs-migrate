@@ -666,7 +666,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.previous.install.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
  $docbase.previous.version = '6.5.SP3'
 
- $docbase.daemon = @{}
+ $docbase.daemon = createObj
  $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
  $docbase.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
  $docbase.daemon.ini = 

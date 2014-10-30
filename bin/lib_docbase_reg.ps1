@@ -84,19 +84,20 @@ function Get-MaxTcpPort($Path)
     return $maxTcpPort
 }
 
-
-function Test-InstallOwnerChanged($cfg)
+<#
+    Tests if install owner has changed
+#>
+function Test-InstallOwnerChanged($cnx, $cfg)
 {
     if ($cfg.env.USERNAME -eq $cfg.resolve('docbase.previous.install.name'))
     {
-        $cnx = New-Connection $cfg.ToDbConnectionString()
+        $previousUser = $cfg.resolve('docbase.previous.install.name')
+        $query = "SELECT user_login_domain, user_source, user_privileges FROM dm_user_s WHERE user_login_name = '$previousUser'"
+        [System.Data.DataTable] $result = Select-Table -cnx $cnx -sql $query
         try
         {
-            $previousUser = $cfg.resolve('docbase.previous.install.name')
-            $query = "SELECT user_login_domain, user_source, user_privileges FROM dm_user_s WHERE user_login_name = '$previousUser'"
-            [System.Data.DataTable] $result = Select-Table -cnx $cnx -sql $query
             if ($result.Rows.Count -ne 1) {
-                 throw "Failed to find user $previousUser in table dm_user_s"     
+                    throw "Failed to find user $previousUser in table dm_user_s"     
             }
             $row = $result.Rows[0]
             if ($row['user_privileges'] -ne 16) {
@@ -106,23 +107,103 @@ function Test-InstallOwnerChanged($cfg)
                 throw "Invalid user source for previous install owner: '$($row['user_source'])'"
             }
             if ($row['user_login_domain'] -ne  $cfg.env.USERDOMAIN) {
-               return [InstallOwnerChanges]::None
+                return [InstallOwnerChanges]::None
             }
             return [InstallOwnerChanges]::Domain
         }
-        finally
+        finally 
         {
-            $cnx.close()
-        }
+            $result.Dispose()
+        }       
     }
     return [InstallOwnerChanges]::Name
 }
 
-Add-Type -TypeDefinition "
+<#
+    Tests if user already exists in dm_user_s
+#>
+function Test-UserExists($cnx, $cfg)
+{
+    $query = "SELECT r_object_id FROM dm_user_s 
+    WHERE 
+    (
+        (user_name = '$($cfg.env.USERNAME)') 
+        OR (user_os_name = '$($cfg.env.USERNAME)') 
+        OR (user_login_name = '$($cfg.env.USERNAME)') 
+    )"
+   
+    $r = Execute-Scalar -cnx $cnx -sql $query
+    if ($null -ne $r) {
+        throw "User $($cfg.env.USERNAME) from domain $($cfg.env.USERDOMAIN) already exists in dm_user"
+    }    
+}
+
+
+function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
+{
+    if ($scope -eq [InstallOwnerChanges]::None)
+    {
+        retun
+    }
+
+    $begin =
+    "BEGIN TRAN 
+    -- records previous user state ...
+    SELECT * INTO dbo.mig_user FROM dbo.dm_user_s WHERE user_login_name = '$($cfg.resolve('docbase.previous.install.name'))';
+    -- update the user
+    UPDATE dm_user_s SET 
+     user_name = '$($cfg.env.USERNAME)'
+    , user_os_name = '$($cfg.env.USERNAME)'
+    , user_os_domain = '$($cfg.env.USERDOMAIN)'
+    , user_login_name = '$($cfg.env.USERNAME)'
+    , user_login_domain = '$($cfg.env.USERDOMAIN)'
+    , user_source = '' 
+     , user_privileges = 16
+    , user_state = 0 
+    WHERE 
+     user_login_name = '$($cfg.resolve('docbase.previous.install.name'))';"
+
+    $updateObjects = 
+    "-- because we updated the user_name, used as pseudo-key in dctm, we need to update many other rows ...
+    UPDATE dbo.dm_sysobject_s SET 
+     owner_name = '$($cfg.env.USERNAME)' 
+    WHERE owner_name = '$($cfg.resolve('docbase.previous.install.name'))';
+
+    UPDATE dbo.dm_sysobject_s SET 
+     acl_domain = '$($cfg.env.USERNAME)'
+    WHERE acl_domain = '$($cfg.resolve('docbase.previous.install.name'))';
+
+    UPDATE dbo.dm_sysobject_s SET 
+     r_lock_owner = '$($cfg.env.USERNAME)' 
+    WHERE r_lock_owner = '$($cfg.resolve('docbase.previous.install.name'))';
+
+    UPDATE dm_acl_s SET 
+     owner_name = '$($cfg.env.USERNAME)' 
+    WHERE owner_name = '$($cfg.resolve('docbase.previous.install.name'))';
+
+    UPDATE dm_group_r SET 
+     users_names = '$($cfg.env.USERNAME)' 
+    WHERE users_names = '$($cfg.resolve('docbase.previous.install.name'))';
+    "
+
+    $sql = $begin
+    if ($scope -eq [InstallOwnerChanges]::Name)
+    {
+         $sql = $sql + $updateObjects
+    }
+    $sql = $sql + 'COMMIT TRAN;'
+
+    $r = Execute-NonQuery -cnx $cnx -sql $sql
+}
+
+<#
+    An enumeration that represents the state of install owner changes
+#>
+Add-Type -TypeDefinition @"
    public enum InstallOwnerChanges
    {
-      None,
-      Name,
-      Domain,
+      None = 0,
+      Domain = 1,
+      Name = 2,
    }
-"
+"@

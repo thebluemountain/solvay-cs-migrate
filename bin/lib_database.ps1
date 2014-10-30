@@ -55,9 +55,7 @@ function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 
 
 <# 
-    Executes an SQL statement against the Connection and returns the number of rows affected.
-    For UPDATE, INSERT, and DELETE statements, the return value is the number of rows affected 
-    by the command. For all other types of statements, the return value is -1.
+    Executes an SQL statement against the Connection and returns ...
 #>
 function Execute-Scalar ($cnx, $sql)
 {  
