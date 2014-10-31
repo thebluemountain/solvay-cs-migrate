@@ -43,6 +43,20 @@ try
     # 1.1: initialize the environment
     $cfg = Initialize $configPath    
 
+
+     
+   foreach($db in $cfg.docbase.docbrokers)
+   {
+    
+         Get-Member $db
+
+
+   }
+
+
+     return
+
+
     # 1.2: current current user's pwd
     $pwd = readPwd $cfg.env.USERDOMAIN $cfg.env.USERNAME
     if ($null -eq $pwd)

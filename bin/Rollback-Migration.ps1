@@ -105,9 +105,8 @@ COMMIT TRAN;
 
 $cnx = New-Connection $cfg.ToDbConnectionString()
 try
-{
-    
-  #  Execute-NonQuery -cnx $cnx -sql $sql        
+{    
+    Execute-NonQuery -cnx $cnx -sql $sql        
 }
 finally
 {

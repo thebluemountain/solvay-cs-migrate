@@ -196,6 +196,25 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
     $r = Execute-NonQuery -cnx $cnx -sql $sql
 }
 
+
+function Update-Docbrokers($cfg)
+{
+   $docbrokers = $cfg.docbase.docbrokers
+    foreach($i in $docbrokers.Keys)
+    {       
+        $db = $docbrokers.($i)    
+        $section = "DOCBROKER_PROJECTION_TARGET"
+        if  ($i -gt 0)
+        {
+            $section = $section + "_$i"
+        }       
+        [iniFile]::WriteValue("$dctmCfgPath\server.ini", $section, "host", $db.host)  
+        [iniFile]::WriteValue("$dctmCfgPath\server.ini", $section, "port", $db.port)  
+
+        Write-Verbose "Added Docbroker $i host= $($db.host) port= $($db.port)"
+    }
+}
+
 <#
     An enumeration that represents the state of install owner changes
 #>
