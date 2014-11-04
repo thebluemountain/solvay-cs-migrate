@@ -4,6 +4,11 @@ param (
     [string]$configPath
     )
 
+if ($null -eq $PSScriptRoot)
+{
+    $PSScriptRoot = (Split-Path $MyInvocation.MyCommand.Path -Parent)
+}
+
 try
 {
     # Start transcription of the PS session to a log file.
@@ -30,7 +35,7 @@ try
     # ------------------- 1- Validate environment --------------------
 
     $startDate = Get-Date  -Verbose     
-    Log-Info("Migration script started on $startDate")
+    Log-Info ("Migration script started on $startDate")
  
     #check for configuration path validity
     $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
@@ -49,7 +54,7 @@ try
     {
      return
     }
-    $cfg.pwd = $pwd
+    $cfg.user.pwd = $pwd
 
     # 1.3: make sure the environment seems OK
     $cfg = check $cfg  
@@ -147,9 +152,9 @@ try
 catch 
 {     
     # A fatal error has occured: the script will stop.  
-    Log-Error $_.Exception
-    Log-Error $_.ScriptStackTrace  
-} 
+    Write-Error $_.Exception
+    Write-Error $_.ScriptStackTrace
+}
 finally
 {
     # Stop session transcript (should be fail safe).
@@ -159,7 +164,3 @@ finally
     }
     catch {}
 }
-
-
-
- 
