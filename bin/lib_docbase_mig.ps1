@@ -9,7 +9,7 @@ function Write-DocbaseRegKey( $obj)
     }
 
     $dmp = _DumpObjAt $obj 
-    Write-Verbose "Reg object=$dmp"
+    Log-Verbose "Reg object=$dmp"
 
     if (test-path $obj.Path)
     {
@@ -17,12 +17,12 @@ function Write-DocbaseRegKey( $obj)
     }
 
     $out = New-Item -Path $obj.Path -type directory -force
-    Write-Output "Reg key $out successfully created"
+    Log-Info "Reg key $out successfully created"
     foreach ($name in $obj.Keys)
     {
         $value = $obj.($name)
         $out = New-ItemProperty -Path $obj.Path -Name $name -PropertyType String -Value $value 
-        Write-Output "Reg entry $name = $value successfully created"
+        Log-Info "Reg entry $name = $value successfully created"
     }    
 }
 
@@ -35,17 +35,67 @@ function New-DocbaseService($obj)
     {
        throw "Argument obj cannot be null"
     }
-
-    $dmp = _DumpObjAt $obj
-    Write-Verbose "Svc object dump=$dmp"
    
     if (Test-DocbaseService $obj.name)
     {
         throw "The docbase service $($obj.name) already exists"
     }   
     $out = New-Service -Name $obj.name -DisplayName $obj.display -StartupType Automatic -BinaryPathName $obj.commandLine -Credential $obj.credentials
-    Write-Verbose $out
-    Write-Output "Docbase service $($obj.name) successfully created."
+    Log-Verbose $out
+    Log-Info "Docbase service $($obj.name) successfully created."
+}
+
+
+<#
+    Creates initialization files 
+#> 
+function Create-IniFiles($cfg)
+{
+    $dctmCfgPath = $cfg.resolve('env.documentum') + '\dba\config\' + $cfg.resolve('docbase.name')
+    New-Item -Path $dctmCfgPath -ItemType "directory" -Force | Out-Null
+    Copy-Item -Path $cfg.resolve('file.server_ini') -Destination "$dctmCfgPath\server.ini" | Out-Null  
+    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination "$dctmCfgPath\dbpasswd.txt" | Out-Null      
+    New-Item -Path $dctmCfgPath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null  
+    [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "database_password_file", "$dctmCfgPath\dbpasswd.tmp.txt")  
+
+    Log-Info("Ini files successfully created in $dctmCfgPath")
+}
+
+
+<# 
+    Updates service files
+#>
+function Update-ServiceFile($cfg)
+{
+    $etcServicesFile = $cfg.resolve('file.services')
+    [uint16] $maxTcpPort = Get-MaxTcpPort  -Path $etcServicesFile
+    if ($maxTcpPort -eq [uint16]::MaxValue-1)
+    {
+        throw "Max tcp port number already used in services file"
+    }
+    add-Content -Path $etcServicesFile -Value "$($cfg.resolve('docbase.service'))    $($maxTcpPort + 1)/tcp   # $($cfg.resolve('docbase.daemon.display'))" | Out-Null
+    add-Content -Path $etcServicesFile -Value "$($cfg.resolve('docbase.service'))_s  $($maxTcpPort + 2)/tcp   # $($cfg.resolve('docbase.daemon.display')) (secure)" | Out-Null
+
+    Log-Info("$etcServicesFile successfully updated")
+}
+
+<#
+    Updates the list of installed docbase
+#>
+function Update-DocbaseList($cfg)
+{
+    $dm_dctm_cfg = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.ini'
+    if (-not( Test-Path -Path  $dm_dctm_cfg))
+    {
+        throw "$dm_dctm_cfg does not exists"
+    }
+    $section = "DOCBASE_$($cfg.resolve('docbase.name'))"
+    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "NAME", $cfg.resolve('docbase.name'))
+    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.previous.version'))
+    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
+    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_NAME", $cfg.resolve('docbase.database'))
+    
+    Log-Info("List of installed docbase successfully updated in $dm_dctm_cfg")
 }
 
 <#
@@ -102,7 +152,7 @@ Add-Type -TypeDefinition @"
 #>
 function Test-InstallOwnerChanged($cnx, $cfg)
 {
-    if ($cfg.env.USERNAME -eq $cfg.resolve('docbase.previous.install.name'))
+    if ($cfg.resolve('user.name') -eq $cfg.resolve('docbase.previous.install.name'))
     {
         $previousUser = $cfg.resolve('docbase.previous.install.name')
         $query = "SELECT user_login_domain, user_source, user_privileges FROM dm_user_s WHERE user_login_name = '$previousUser'"
@@ -119,7 +169,7 @@ function Test-InstallOwnerChanged($cnx, $cfg)
             if ($row['user_source'] -ne ' ')            {
                 throw "Invalid user source for previous install owner: '$($row['user_source'])'"
             }
-            if ($row['user_login_domain'] -ne  $cfg.env.USERDOMAIN) {
+            if ($row['user_login_domain'] -ne  $cfg.resolve('user.domain')) {
                 return [InstallOwnerChanges]::None
             }
             return [InstallOwnerChanges]::Domain
@@ -137,17 +187,18 @@ function Test-InstallOwnerChanged($cnx, $cfg)
 #>
 function Test-UserExists($cnx, $cfg)
 {
+    $newUserName = $($cfg.resolve('user.name'))
     $query = "SELECT r_object_id FROM dm_user_s 
     WHERE 
     (
-        (user_name = '$($cfg.env.USERNAME)') 
-        OR (user_os_name = '$($cfg.env.USERNAME)') 
-        OR (user_login_name = '$($cfg.env.USERNAME)') 
+        (user_name = '$newUserName') 
+        OR (user_os_name = '$newUserName') 
+        OR (user_login_name = '$newUserName') 
     )"
    
     $r = Execute-Scalar -cnx $cnx -sql $query
     if ($null -ne $r) {
-        throw "User $($cfg.env.USERNAME) from domain $($cfg.env.USERDOMAIN) already exists in dm_user"
+        throw "User $newUserName already exists in dm_user"
     }    
 }
 
@@ -161,44 +212,48 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
         retun
     }
 
+    $previousUserName = $($cfg.resolve('docbase.previous.install.name'))
+    $newUserName = $($cfg.resolve('user.name'))
+    $newUserDomain = $($cfg.resolve('user.domain'))
+
     $begin =
     "BEGIN TRAN 
     -- records previous user state ...
-    SELECT * INTO dbo.mig_user FROM dbo.dm_user_s WHERE user_login_name = '$($cfg.resolve('docbase.previous.install.name'))';
+    SELECT * INTO dbo.mig_user FROM dbo.dm_user_s WHERE user_login_name = '$previousUserName';
     -- update the user
     UPDATE dm_user_s SET 
-     user_name = '$($cfg.env.USERNAME)'
-    , user_os_name = '$($cfg.env.USERNAME)'
-    , user_os_domain = '$($cfg.env.USERDOMAIN)'
-    , user_login_name = '$($cfg.env.USERNAME)'
-    , user_login_domain = '$($cfg.env.USERDOMAIN)'
-    , user_source = '' 
-     , user_privileges = 16
-    , user_state = 0 
+     user_name = '$newUserName',
+     user_os_name = '$newUserName',
+     user_os_domain = '$newUserDomain',
+     user_login_name = '$newUserName',
+     user_login_domain = '$newUserDomain',
+     user_source = '',
+     user_privileges = 16,
+     user_state = 0 
     WHERE 
-     user_login_name = '$($cfg.resolve('docbase.previous.install.name'))';"
+     user_login_name = '$previousUserName';"
 
     $updateObjects = 
     "-- because we updated the user_name, used as pseudo-key in dctm, we need to update many other rows ...
     UPDATE dbo.dm_sysobject_s SET 
-     owner_name = '$($cfg.env.USERNAME)' 
-    WHERE owner_name = '$($cfg.resolve('docbase.previous.install.name'))';
+     owner_name = '$newUserName' 
+    WHERE owner_name = '$previousUserName';
 
     UPDATE dbo.dm_sysobject_s SET 
-     acl_domain = '$($cfg.env.USERNAME)'
-    WHERE acl_domain = '$($cfg.resolve('docbase.previous.install.name'))';
+     acl_domain = '$newUserName'
+    WHERE acl_domain = '$previousUserName';
 
     UPDATE dbo.dm_sysobject_s SET 
-     r_lock_owner = '$($cfg.env.USERNAME)' 
-    WHERE r_lock_owner = '$($cfg.resolve('docbase.previous.install.name'))';
+     r_lock_owner = '$newUserName' 
+    WHERE r_lock_owner = '$previousUserName';
 
     UPDATE dm_acl_s SET 
-     owner_name = '$($cfg.env.USERNAME)' 
-    WHERE owner_name = '$($cfg.resolve('docbase.previous.install.name'))';
+     owner_name = '$newUserName' 
+    WHERE owner_name = '$previousUserName';
 
     UPDATE dm_group_r SET 
-     users_names = '$($cfg.env.USERNAME)' 
-    WHERE users_names = '$($cfg.resolve('docbase.previous.install.name'))';
+     users_names = '$newUserName' 
+    WHERE users_names = '$previousUserName)';
     "
 
     $sql = $begin
@@ -209,6 +264,8 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
     $sql = $sql + 'COMMIT TRAN;'
 
     $r = Execute-NonQuery -cnx $cnx -sql $sql
+
+    Log-Info "Install owner successfully changed from $previousUserName to $newUserDomain\$newUserName"
 }
 
 <#
@@ -228,7 +285,7 @@ function Update-Docbrokers($cfg)
         [iniFile]::WriteValue("$dctmCfgPath\server.ini", $section, "host", $db.host)  
         [iniFile]::WriteValue("$dctmCfgPath\server.ini", $section, "port", $db.port)  
 
-        Write-Output "Updated Docbroker $i host= $($db.host) port= $($db.port)"
+        Log-Info "Updated Docbroker $i host= $($db.host) port= $($db.port)"
     }
 }
 
@@ -270,7 +327,7 @@ function Check-Locations($cnx, $cfg)
             if (-not $cfg.location.ContainsKey($loc)) {
                 throw "No entry in migrate.properties for location $loc)"  
             }                    
-            Write-Verbose "Entry for location $loc found"                               
+            Log-Verbose "Entry for location $loc found"                               
         }
     }
     finally 
@@ -296,7 +353,7 @@ function Check-Locations($cnx, $cfg)
                 throw "The path defined for location $ is invalid:  $fsPath)"
             }
 
-            Write-Verbose "Valid location $loc found, path = $fsPath)"   
+            Log-Verbose "Valid location $loc found, path = $fsPath)"   
         }           
     
     }
@@ -323,7 +380,7 @@ function Update-Locations($cnx, $cfg)
     $sql = $sql + 'COMMIT TRAN;'
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Write-Output 'Successfully updated locations' 
+    Log-Info 'Successfully updated locations' 
 }
 
 <#
@@ -349,7 +406,7 @@ function Disable-Jobs($cnx, $cfg)
     COMMIT TRAN;'
     
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Write-Output "Jobs successfully disabled"
+    Log-Info "Jobs successfully disabled"
 }
 
 <#
@@ -365,7 +422,7 @@ function Fix-MountPoint($cnx, $cfg)
     COMMIT TRAN"
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Write-Output "Mount points successfully fixed"
+    Log-Info "Mount points successfully fixed"
 }
 
 function Fix-DmLocations($cnx, $cfg)
@@ -380,7 +437,7 @@ function Fix-DmLocations($cnx, $cfg)
     WHERE r_object_id IN (SELECT r_object_id FROM dm_location_sv WHERE object_name = 'nls_chartrans');"
       
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Write-Output "Dm locations successfully fixed"
+    Log-Info "Dm locations successfully fixed"
 
 }
 
@@ -458,7 +515,7 @@ function New-MigrationTables($cnx)
     ON dbo.mig_indexes (table_name, index_name)'
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Write-Output "Migration tables created"
+    Log-Info "Migration tables created"
 }
 
 function Test-MigrationTables($cnx)
@@ -489,7 +546,7 @@ function Remove-MigrationTables($cnx)
                        'mig_locations'"
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null       
-    Write-Output "Migration tables deleted"
+    Log-Info "Migration tables deleted"
 }
 
 

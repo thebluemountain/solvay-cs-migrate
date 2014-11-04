@@ -22,7 +22,7 @@ function New-Connection ($cnxString)
  #>
 function Select-Table ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {
-    Write-Verbose "Select-Table - SQL Statement: $sql"
+    Log-Verbose "Select-Table - SQL Statement: $sql"
     $da = new-object System.Data.Odbc.OdbcDataAdapter $sql,$cnx
     try
     {
@@ -45,11 +45,11 @@ function Select-Table ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 #>
 function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {       
-    Write-Verbose "Execute-NonQuery - SQL Statement: $sql"
+    Log-Verbose "Execute-NonQuery - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
     $command.CommandText  = $sql
     $count = $command.ExecuteNonQuery()
-    Write-Verbose "$count row(s) affected"
+    Log-Verbose "$count row(s) affected"
     return $count
 }
 
@@ -59,10 +59,10 @@ function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 #>
 function Execute-Scalar ($cnx, $sql)
 {  
-    Write-Verbose "Execute-Scalar - SQL Statement: $sql"
+    Log-Verbose "Execute-Scalar - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
     $command.CommandText  = $sql
     $result = $command.ExecuteScalar()
-    Write-Verbose "Result = $result"
+    Log-Verbose "Result = $result"
     return $result  
 }

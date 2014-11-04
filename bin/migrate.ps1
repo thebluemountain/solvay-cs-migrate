@@ -22,7 +22,7 @@ try
     . "$PSScriptRoot\lib_config.ps1"
 
     # Include docbase registration functions
-    . "$PSScriptRoot\lib_docbase_reg.ps1"
+    . "$PSScriptRoot\lib_docbase_mig.ps1"
      
     # Include database functions
     . "$PSScriptRoot\lib_database.ps1"
@@ -30,7 +30,7 @@ try
     # ------------------- 1- Validate environment --------------------
 
     $startDate = Get-Date  -Verbose     
-    Write-Output "Migration script started on $startDate"
+    Log-Info("Migration script started on $startDate")
  
     #check for configuration path validity
     $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
@@ -38,13 +38,13 @@ try
     {
         throw $pathErr
     }   
-    Write-Output "Configuration path: $configPath"
+    Log-Info("Configuration path: $configPath")
 
     # 1.1: initialize the environment
     $cfg = Initialize $configPath    
 
     # 1.2: current current user's pwd
-    $pwd = readPwd $cfg.env.USERDOMAIN $cfg.env.USERNAME
+    $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
     if ($null -eq $pwd)
     {
      return
@@ -78,40 +78,17 @@ try
     Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
 
     # 2.2- creating initialization files    
-    $dctmCfgPath = $cfg.resolve('env.documentum') + '\dba\config\' + $cfg.resolve('docbase.name')
-    New-Item -Path $dctmCfgPath -ItemType "directory" -Force   
-    Copy-Item -Path $cfg.resolve('file.server_ini') -Destination "$dctmCfgPath\server.ini"   
-    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination "$dctmCfgPath\dbpasswd.txt"       
-    New-Item -Path $dctmCfgPath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd')   
-    [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "database_password_file", "$dctmCfgPath\dbpasswd.tmp.txt")  
+    Create-IniFiles($cfg)
 
     # 2.3- updating service files
-    $etcServicesFile = $cfg.resolve('file.services')
-    [uint16] $maxTcpPort = Get-MaxTcpPort  -Path $etcServicesFile
-    if ($maxTcpPort -eq [uint16]::MaxValue-1)
-    {
-        throw "Max tcp port number already used in services file"
-    }
-    add-Content -Path $etcServicesFile -Value "$($cfg.resolve('docbase.service'))    $($maxTcpPort + 1)/tcp   # $($cfg.resolve('docbase.daemon.display'))"
-    add-Content -Path $etcServicesFile -Value "$($cfg.resolve('docbase.service'))_s  $($maxTcpPort + 2)/tcp   # $($cfg.resolve('docbase.daemon.display')) (secure)"
+    Update-ServiceFile($cfg)
 
     # 2.4- creating service
     New-DocbaseService $cfg.ToDocbaseService()
 
-
     # 2.5- updating the list of installed docbase
-    $dm_dctm_cfg = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.ini'
-    if (-not( Test-Path -Path  $dm_dctm_cfg))
-    {
-        throw "$dm_dctm_cfg does not exists"
-    }
-    $section = "DOCBASE_$($cfg.resolve('docbase.name'))"
-    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "NAME", $cfg.resolve('docbase.name'))
-    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.previous.version'))
-    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
-    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_NAME", $cfg.resolve('docbase.database'))
-    
-    
+    Update-DocbaseList($cfg)
+        
     # ----------------------  3- modifying installation to allow for starting in new environment -----------------
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
@@ -130,11 +107,11 @@ try
         }
         else
         {
-            Write-Output "Install owner has not changed"
+            Log-Info("Install owner has not changed")
         }
    
         # updating the server.ini file  
-        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "install_owner", $cfg.env.USERNAME)  
+        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "install_owner", $cfg.resolve('user.name'))  
         [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "user_auth_target", $cfg.resolve('docbase.auth'))  
 
         # managing docbroker changes
@@ -153,7 +130,11 @@ try
         # fixing some dm_location
         Fix-DmLocations -cnx $cnx -cfg $cfg
 
-        # 3.7- updating app_server_uri in server config
+        # TODO - updating app_server_uri in server config        
+
+        # TODO - Managing target server change
+
+        # TODO - Managing custom indexes
      }
     finally
     {
@@ -166,8 +147,8 @@ try
 catch 
 {     
     # A fatal error has occured: the script will stop.  
-    Write-Error $_.Exception
-    Write-Error $_.ScriptStackTrace  
+    Log-Error $_.Exception
+    Log-Error $_.ScriptStackTrace  
 } 
 finally
 {

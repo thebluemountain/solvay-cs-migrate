@@ -22,13 +22,13 @@ try
     . "$PSScriptRoot\lib_config.ps1"
 
     # Include docbase registration functions
-    . "$PSScriptRoot\lib_docbase_reg.ps1"
+    . "$PSScriptRoot\lib_docbase_mig.ps1"
      
     # Include database functions
     . "$PSScriptRoot\lib_database.ps1"  
    
     $startDate = Get-Date  -Verbose     
-    Write-Output "Post migration script started on $startDate"
+    Log-Info "Post migration script started on $startDate"
  
     #check for configuration path validity
     $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
@@ -36,7 +36,7 @@ try
     {
         throw $pathErr
     }   
-    Write-Output "Configuration path: $configPath"
+    Log-Info "Configuration path: $configPath"
     $cfg = Initialize $configPath    
 
 
@@ -59,8 +59,8 @@ try
 catch 
 {     
     # A fatal error has occured: the script will stop.  
-    Write-Error $_.Exception
-    Write-Error $_.ScriptStackTrace  
+    Log-Error $_.Exception
+    Log-Error $_.ScriptStackTrace  
 } 
 finally
 {
@@ -71,3 +71,5 @@ finally
     }
     catch {}
 }
+
+

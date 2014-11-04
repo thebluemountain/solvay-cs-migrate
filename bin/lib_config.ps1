@@ -691,6 +691,14 @@ function createDocbaseProps ($ini, $env, $db)
  return $obj
 }
 
+function createUserProps ($env)
+{
+    $user = createObj
+    $user.name = '${' + $env + '.USERNAME}'
+    $user.domain = '${'+ $env + '.USERDOMAIN}'
+    return $user
+}
+
 function GetDocbaseProps ($obj, $path)
 {
  LoadPropertiesFile $obj $path | out-null
@@ -734,15 +742,18 @@ function Initialize ($path)
  # loads the environment variables
  $env = getEnvironment
 
+ $user = createUserProps('env')
+
  # loads the server.ini into an object
  $ini = getServerIni 'ini' $file.server_ini
  # loads the migration stuff as well
- $docbase = createDocbaseProps 'ini' 'env' 'docbase'
- $docbase.env = $env
- $docbase.file = $file
- $docbase.ini = $ini
- $docbase = getDocbaseProps $docbase $file.migrate
- return $docbase
+ $config = createDocbaseProps 'ini' 'env' 'docbase'
+ $config.env = $env
+ $config.file = $file
+ $config.ini = $ini
+ $config.user = $user
+ $config = getDocbaseProps $config $file.migrate
+ return $config
 }
 
 
@@ -1020,7 +1031,7 @@ function asDocbaseService($obj)
     $svc.name = $obj.resolve('docbase.daemon.name')
     $svc.display = $obj.resolve('docbase.daemon.display')
     $svc.commandLine = $obj.resolve('docbase.daemon.cmd')  
-    $usr = $cfg.env.USERDOMAIN + '\'+ $cfg.env.USERNAME    
+    $usr = $cfg.resolve('user.domain') + '\'+ $cfg.resolve('user.name')    
     $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.pwd)
    
     return $svc
@@ -1055,4 +1066,28 @@ $iniClassSrc = "
         }
     }"
 Add-Type -TypeDefinition $iniClassSrc 
+
+
+function Log-Info($msg)
+{
+    Write-Output "=> $msg `r`n"
+}
+
+
+function Log-Warning($msg)
+{
+    Write-Warning $msg 
+}
+
+
+function Log-Error($msg)
+{
+    Write-Error $msg 
+}
+
+
+function Log-Verbose($msg)
+{
+    Write-Verbose $msg 
+}
 
