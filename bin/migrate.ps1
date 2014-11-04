@@ -38,17 +38,17 @@ try
     Log-Info ("Migration script started on $startDate")
  
     #check for configuration path validity
-    $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
+    $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
     if ($pathErr)
     {
         throw $pathErr
     }   
     Log-Info("Configuration path: $configPath")
 
-    # 1.1: initialize the environment
-    $cfg = Initialize $configPath    
+    # initialize the environment
+    $cfg = Initialize $configPath
 
-    # 1.2: current current user's pwd
+    # current current user's pwd
     $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
     if ($null -eq $pwd)
     {
@@ -56,7 +56,7 @@ try
     }
     $cfg.user.pwd = $pwd
 
-    # 1.3: make sure the environment seems OK
+    # make sure the environment seems OK
     $cfg = check $cfg  
 
     # Prepare migration temp tables 
@@ -66,8 +66,6 @@ try
         if (Test-MigrationTables($cnx)) {
             throw "Migration temporary tables already present"
         }
-
-       # New-MigrationTables -cnx $cnx  
     }
     finally
     {
@@ -77,14 +75,11 @@ try
         }
     }
     
-    # ----------------------  3- modifying installation to allow for starting in new environment -----------------
+    # ---------------------- Apply modification to environnment prior to update ----------------------
+    # Open ODBC connection
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
-    {    # Disable all jobs and 
-        Disable-Jobs -cnx $cnx -cfg $cfg
-        
-        # Change target server on jobs
-        Update-JobsTargetServer -cnx $cnx -cfg $cfg
+    {   
         # managing the install owner name change
   
         # is there a change ?     
@@ -109,20 +104,19 @@ try
 
         # TODO - record & delete custom indexes
         
-        # ------------------ 2- preparing the installation ------------------------
-        # 2.1- configuring registry
+        # configuring registry
         Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
 
-        # 2.2- creating initialization files    
+        # creating initialization files    
         Create-IniFiles($cfg)
 
-        # 2.3- updating service files
+        # updating service files
         Update-ServiceFile($cfg)
 
-        # 2.4- creating service
+        # creating service
         New-DocbaseService $cfg.ToDocbaseService()
 
-        # 2.5- updating the list of installed docbase
+        # updating the list of installed docbase
         Update-DocbaseList($cfg)
         
         # updating the server.ini file

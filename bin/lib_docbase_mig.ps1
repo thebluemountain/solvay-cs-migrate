@@ -424,7 +424,7 @@ function Update-JobsTargetServer($cnx, $cfg)
 }
 
 <#
-    Fixes mount points
+    Update mount points
 #>
 function Update-MountPoint($cnx, $cfg)
 {
@@ -438,6 +438,7 @@ function Update-MountPoint($cnx, $cfg)
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
     Log-Info "Mount points successfully fixed"
 }
+
 
 function Update-DmLocations($cnx, $cfg)
 {
@@ -576,13 +577,13 @@ function Remove-MigrationTables($cnx)
     Log-Info "Migration tables deleted"
 }
 
-function Get-IndexDDL($cnx)
+function Get-IndexDDL($cnxStr)
 {
 
     [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | out-null
     # get the server connection
     $sc = new-object('Microsoft.SqlServer.Management.Common.ServerConnection')
-    $sc.ConnectionString = $cnx
+    $sc.ConnectionString = $cnxStr
     # get the server now
     $s = new-object ('Microsoft.SqlServer.Management.Smo.Server') $sc
     $db = $s.Databases['DM_QUALITY_docbase']
