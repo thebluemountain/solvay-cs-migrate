@@ -4,6 +4,11 @@ param (
     [string]$configPath
     )
 
+if ($null -eq $PSScriptRoot)
+{
+    $PSScriptRoot = (Split-Path $MyInvocation.MyCommand.Path -Parent)
+}
+
 try
 {
     # Start transcription of the PS session to a log file.
@@ -30,7 +35,7 @@ try
     # ------------------- 1- Validate environment --------------------
 
     $startDate = Get-Date  -Verbose     
-    Log-Info("Migration script started on $startDate")
+    Log-Info ("Migration script started on $startDate")
  
     #check for configuration path validity
     $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
@@ -49,7 +54,7 @@ try
     {
      return
     }
-    $cfg.pwd = $pwd
+    $cfg.user.pwd = $pwd
 
     # 1.3: make sure the environment seems OK
     $cfg = check $cfg  
@@ -72,27 +77,14 @@ try
         }
     }
     
-    # ------------------ 2- preparing the installation ------------------------
-
-    # 2.1- configuring registry
-    Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
-
-    # 2.2- creating initialization files    
-    Create-IniFiles($cfg)
-
-    # 2.3- updating service files
-    Update-ServiceFile($cfg)
-
-    # 2.4- creating service
-    New-DocbaseService $cfg.ToDocbaseService()
-
-    # 2.5- updating the list of installed docbase
-    Update-DocbaseList($cfg)
-        
     # ----------------------  3- modifying installation to allow for starting in new environment -----------------
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
-    {   
+    {    # Disable all jobs and 
+        Disable-Jobs -cnx $cnx -cfg $cfg
+        
+        # Change target server on jobs
+        Update-JobsTargetServer -cnx $cnx -cfg $cfg
         # managing the install owner name change
   
         # is there a change ?     
@@ -109,8 +101,31 @@ try
         {
             Log-Info("Install owner has not changed")
         }
-   
-        # updating the server.ini file  
+        # Disable all jobs and 
+        Disable-Jobs -cnx $cnx -cfg $cfg
+        
+        # Change target server on jobs
+        Update-JobsTargetServer -cnx $cnx -cfg $cfg
+
+        # TODO - record & delete custom indexes
+        
+        # ------------------ 2- preparing the installation ------------------------
+        # 2.1- configuring registry
+        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
+
+        # 2.2- creating initialization files    
+        Create-IniFiles($cfg)
+
+        # 2.3- updating service files
+        Update-ServiceFile($cfg)
+
+        # 2.4- creating service
+        New-DocbaseService $cfg.ToDocbaseService()
+
+        # 2.5- updating the list of installed docbase
+        Update-DocbaseList($cfg)
+        
+        # updating the server.ini file
         [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "install_owner", $cfg.resolve('user.name'))  
         [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "user_auth_target", $cfg.resolve('docbase.auth'))  
 
@@ -122,13 +137,7 @@ try
         Update-Locations -cnx $cnx -cfg $cfg
 
         # fixing some dm_location
-        Update-DmLocations -cnx $cnx -cfg $cfg
-
-        # Disable all jobs and 
-        Disable-Jobs -cnx $cnx -cfg $cfg
-        
-        # Change target server on jobs
-        Update-JobsTargetServer -cnx $cnx -cfg $cfg
+        Update-DmLocations -cnx $cnx -cfg $cfg       
 
         # Fix mount points
         Update-MountPoint -cnx $cnx -cfg $cfg
@@ -140,7 +149,6 @@ try
         # TODO - updating app_server_uri in server config        
 
 
-        # TODO - Managing custom indexes
      }
     finally
     {
@@ -153,9 +161,9 @@ try
 catch 
 {     
     # A fatal error has occured: the script will stop.  
-    Log-Error $_.Exception
-    Log-Error $_.ScriptStackTrace  
-} 
+    Write-Error $_.Exception
+    Write-Error $_.ScriptStackTrace
+}
 finally
 {
     # Stop session transcript (should be fail safe).
@@ -165,7 +173,3 @@ finally
     }
     catch {}
 }
-
-
-
- 

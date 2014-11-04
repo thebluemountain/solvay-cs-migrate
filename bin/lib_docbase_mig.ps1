@@ -152,15 +152,15 @@ Add-Type -TypeDefinition @"
 #>
 function Test-InstallOwnerChanged($cnx, $cfg)
 {
-    if ($cfg.resolve('user.name') -eq $cfg.resolve('docbase.previous.install.name'))
+    if ($cfg.resolve('user.name') -eq $cfg.resolve('docbase.previous.name'))
     {
-        $previousUser = $cfg.resolve('docbase.previous.install.name')
+        $previousUser = $cfg.resolve('docbase.previous.name')
         $query = "SELECT user_login_domain, user_source, user_privileges FROM dm_user_s WHERE user_login_name = '$previousUser'"
         [System.Data.DataTable] $result = Select-Table -cnx $cnx -sql $query
         try
         {
             if ($result.Rows.Count -ne 1) {
-                throw "Failed to find user $previousUser in table dm_user_s"     
+                throw "Failed to find user $previousUser in table dm_user_s"
             }
             $row = $result.Rows[0]
             if ($row['user_privileges'] -ne 16) {
@@ -212,7 +212,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
         retun
     }
 
-    $previousUserName = $($cfg.resolve('docbase.previous.install.name'))
+    $previousUserName = $($cfg.resolve('docbase.previous.name'))
     $newUserName = $($cfg.resolve('user.name'))
     $newUserDomain = $($cfg.resolve('user.domain'))
 
@@ -460,8 +460,8 @@ function Update-ServerConfig($cnx, $cfg)
 {
     $sql =
     "UPDATE dm_server_config_s
-    SET r_host_name = '$($cfg.resovle('env.COMPUTERNAME'))',
-    web_server_loc = '$($cfg.resovle('env.COMPUTERNAME'))'
+    SET r_host_name = '$($cfg.resolve('env.COMPUTERNAME'))',
+    web_server_loc = '$($cfg.resolve('env.COMPUTERNAME'))'
     WHERE r_object_id IN
     (
         SELECT r_object_id FROM dm_server_config_sv

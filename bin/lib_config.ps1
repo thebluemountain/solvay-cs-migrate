@@ -661,11 +661,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.service = '${' + $ini + '.SERVER_STARTUP.service}'
  $docbase.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
 
- $docbase.previous = createObj
- $docbase.previous.install = createObj
- $docbase.previous.install.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
- $docbase.previous.version = '6.5.SP3'
-
+ # the configuration for daemon
  $docbase.daemon = createObj
  $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
  $docbase.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
@@ -674,7 +670,6 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.daemon.logname = '${' + $db + '.name}.log'
  $docbase.daemon.log = 
   '${' + $env + '.DOCUMENTUM}\dba\log\${' + $db + '.daemon.logname}'
- 
  $docbase.daemon.cmd = '"${' + $env + '.DM_HOME}\bin\documentum.exe "' + 
   '-docbase_name "${' + $db + '.name}" ' + 
   '-security acl ' + 
@@ -683,9 +678,25 @@ function createDocbaseProps ($ini, $env, $db)
   '-install_owner "${' + $env + '.USERNAME}" ' + 
   '-logfile "${' + $db + '.daemon.log}"'
 
- $docbase.docbroker = createObj
- $docbase.docbroker.host = '${' + $env + '.COMPUTERNAME}'
- $docbase.docbroker.port = 1489
+ # for the docbrokers: there is at least 1
+ $docbase.docbrokers = createObj
+ $docbase.docbrokers.'0' = createObj
+ $docbase.docbrokers.'0'.host = '${' + $env + '.COMPUTERNAME}'
+ $docbase.docbrokers.'0'.port = 1489
+
+ # for the JMS
+ $docbase.jms = createObj
+ $docbase.jms.host = '${' + $env + '.COMPUTERNAME}'
+ $docbase.jms.port = 9080
+
+ # regarding previous state
+ $docbase.previous = createObj
+ $docbase.previous.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
+ $docbase.previous.version = '6.5.SP3'
+ $docbase.previous.jms = createObj
+ $docbase.previous.jms.host = '${' + $db + '.previous.host}'
+ $docbase.previous.jms.port = 9080
+
  $obj = createDynaObj
  $obj.($db) = $docbase
  return $obj
@@ -832,6 +843,16 @@ function checkObj ($obj)
  {
   throw 'leading or trailing spaces in value for docbase.service: ''' + $val + ''''
  }
+ # should have a previous host
+ $val = $obj.resolve('docbase.previous.host')
+ if ($null -eq $val)
+ {
+  throw 'docbase.previous.host cannot be resolved'
+ }
+ if ($val -ne $val.Trim())
+ {
+  throw 'leading or trailing spaces in value for docbase.previous.host: ''' + $val + ''''
+ }
  # ... TODO: make other tests: the more we make here, 
  # the faster user will know about mistakes
  return $obj
@@ -846,6 +867,7 @@ function checkEnv ($obj)
   throw 'configuration directory ''' + $val + ''' for docbase ''' + 
    $obj.resolve('docbase.name') + ''' already exists'
  }
+ Write-Host 'target config directory existence checked...'
 
  # make sure there is no registry entry 
  # HKEY_LOCAL_MACHINE\SOFTWARE\Documentum\DOCBASES\${cfg.docbase.name} 
@@ -860,6 +882,7 @@ function checkEnv ($obj)
   throw 'registry key ''' + $val + ''' for docbase ''' + 
    $obj.resolve('docbase.name') + ''' already exists'
  }
+ Write-Host 'target config registry existence checked...'
  # make sure there is no line starting with ${cfg.docbase.service} in cfg.file.services
  # ... and make sure there is no line starting with ${cfg.docbase.service}_s in cfg.file.services
  # the first case is enough
@@ -871,6 +894,7 @@ function checkEnv ($obj)
    ' already exists in file ' + $obj.resolve('file.services') + 
    ' (at line ' + $val[0].linenumber + ')'
  }
+ Write-Host 'services entry checked...'
  # make sure there is an DSN named ${cfg.docbase.dsn}
  $val = 'HKLM:\Software\ODBC\ODBC.INI\' + $obj.resolve('docbase.dsn')
  if (!(test-path $val))
@@ -878,6 +902,7 @@ function checkEnv ($obj)
   throw 'ODBC source ''' + $obj.resolve('docbase.dsn') + ''' for docbase ''' + 
    $obj.resolve('docbase.name') + ''' does not exists yet'
  }
+ Write-Host 'ODBC configuration existence checked...'
  # make sure there is no service named ${cfg.docbase.daemon.name}
  $val = 'Name=''' + $obj.resolve('docbase.daemon.name') + ''''
  $val = Get-WmiObject -Class Win32_Service -Filter ('Name=''' + $obj.resolve('docbase.daemon.name') + '''')
@@ -885,6 +910,7 @@ function checkEnv ($obj)
  {
   throw 'a service named ' + $obj.resolve('docbase.daemon.name') + ' already exists'
  }
+ Write-Host 'windows service existence checked...'
  # make sure we have a docbase.dsn, docbase.user and docbase.pwd
  if (!$obj.resolve('docbase.dsn'))
  {
@@ -898,7 +924,7 @@ function checkEnv ($obj)
  {
   throw 'missing docbase.pwd property'
  }
- <# this is currently comemnted as i don't have the docbroker yet
+ <# this is currently commented as i don't have the docbroker yet
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
  $val = & 'dmqdocbroker'  '-t',$obj.resolve('docbase.docbroker.host'),'-p',$obj.resolve('docbase.docbroker.port'),'-c','ping' 2>&1 | select-string -pattern '^Successful reply from docbroker at host'
  if ((!$val) -or (0 -eq $val.length))
@@ -919,6 +945,7 @@ function checkEnv ($obj)
   }
  }
  #>
+ Write-Host 'docbroker access checked...'
  return $obj
 }
 
@@ -927,7 +954,7 @@ function checkDB ($obj)
  $cnx = New-Connection $obj.ToDbConnectionString()
  try
  {
-  write-host ('connected...')
+  Write-Host 'database connection checked...'
 <#
 - make sure there i can connect to $obj.docbase.dsn (in database $obj.docbase.database ?) with 
   login $obj.docbase.user using password $obj.docbase.pwd 
@@ -959,12 +986,12 @@ function checkDB ($obj)
     throw 'unexpected docbase id (' + $id + ') found in database for docbase ' + 
      $obj.resolve('docbase.name') + ': expected ' + $obj.resolve('docbase.id')
    }
+   Write-Host 'docbase config checked...'
   }
   # saves the hexid: 8 digits representation
   [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
   $hex = $val.ToString('x8')
   $obj.docbase.hexid = $hex
-
  }
  finally
  {
@@ -1004,8 +1031,7 @@ function asDocbaseRegistry ($obj)
 
  $reg = createObj
 
- $reg.Path =  "hklm:\SOFTWARE\Documentum\DOCBASES\$($obj.resolve('docbase.name'))"
-
+ $reg.Path = 'hklm:\SOFTWARE\Documentum\DOCBASES\' + $obj.resolve('docbase.name')
  $reg.DM_AUTH_LOCATION = $obj.resolve('docbase.auth')
  $reg.DM_DATABASE_NAME = $obj.resolve('docbase.database')
  $reg.DM_DOCBASE_CONNECTION = $obj.resolve('docbase.dsn')
@@ -1031,9 +1057,8 @@ function asDocbaseService($obj)
     $svc.name = $obj.resolve('docbase.daemon.name')
     $svc.display = $obj.resolve('docbase.daemon.display')
     $svc.commandLine = $obj.resolve('docbase.daemon.cmd')  
-    $usr = $cfg.resolve('user.domain') + '\'+ $cfg.resolve('user.name')    
-    $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.pwd)
-   
+    $usr = $obj.resolve('user.domain') + '\'+ $obj.resolve('user.name')    
+    $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.user.pwd)
     return $svc
 }
 
@@ -1060,7 +1085,7 @@ $iniClassSrc = "
         }
         public static string ReadValue(string path, string Section, string Key)
         {
-            var temp = new System.Text.StringBuilder(255);
+            System.Text.StringBuilder temp = new System.Text.StringBuilder(255);
             int i = GetPrivateProfileString(Section, Key, """", temp, 255, path);
             return temp.ToString();
         }
@@ -1070,24 +1095,22 @@ Add-Type -TypeDefinition $iniClassSrc
 
 function Log-Info($msg)
 {
-    Write-Output "=> $msg"
+    Write-Output $msg
 }
-
 
 function Log-Warning($msg)
 {
-    Write-Warning $msg 
+    Write-Warning ('w?' + $msg)
 }
-
 
 function Log-Error($msg)
 {
-    Write-Error $msg 
+    Write-Error ('e!' + $msg)
 }
 
 
 function Log-Verbose($msg)
 {
-    Write-Verbose $msg 
+    Write-Verbose ('v:' + $msg)
 }
 
