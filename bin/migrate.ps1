@@ -121,18 +121,24 @@ try
         Check-Locations -cnx $cnx -cfg $cfg       
         Update-Locations -cnx $cnx -cfg $cfg
 
-        # disabling all jobs
-        Disable-Jobs -cnx $cnx -cfg cfg
+        # fixing some dm_location
+        Update-DmLocations -cnx $cnx -cfg $cfg
+
+        # Disable all jobs and 
+        Disable-Jobs -cnx $cnx -cfg $cfg
+        
+        # Change target server on jobs
+        Update-JobsTargetServer -cnx $cnx -cfg $cfg
 
         # Fix mount points
-        Fix-MountPoint -cnx $cnx -cfg $cfg
+        Update-MountPoint -cnx $cnx -cfg $cfg
        
-        # fixing some dm_location
-        Fix-DmLocations -cnx $cnx -cfg $cfg
+        # Update Server config
+        Update-ServerConfig -cnx $cnx -cfg $cfg
+        
 
         # TODO - updating app_server_uri in server config        
 
-        # TODO - Managing target server change
 
         # TODO - Managing custom indexes
      }

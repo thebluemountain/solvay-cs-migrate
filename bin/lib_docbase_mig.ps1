@@ -346,8 +346,8 @@ function Check-Locations($cnx, $cfg)
                 throw "Location $loc is not in the list of defined dm_location_s of use by a file store"
             }                         
 
-            $hid = docbaseIdAsHex($cfg.resolve('docbase.id'))
-            $fsPath = $cfg.location.($loc) + '\' + $hid 
+#            $hid = docbaseIdAsHex($cfg.resolve('docbase.id'))
+            $fsPath = $cfg.location.($loc) + '\' + $cfg.docbase.hexid  
 
             if (-not (Test-Path($fsPath))) {
                 throw "The path defined for location $ is invalid:  $fsPath)"
@@ -384,19 +384,7 @@ function Update-Locations($cnx, $cfg)
 }
 
 <#
-    Convert the docbase id as a uint value in hex, padded to 8 leading zeroes
-#>
-function docbaseIdAsHex([Int]$id){
-
-    if ($id -gt [Uint32]::MaxValue) {
-        throw "Invalid docbase id $id"
-    }
-
-    return [Uint32]::Parse($id).ToString("X8")
-}
-
-<#
-    Disables all jobs
+    Disables all jobs and change target_server
 #>
 function Disable-Jobs($cnx, $cfg)
 {
@@ -409,10 +397,36 @@ function Disable-Jobs($cnx, $cfg)
     Log-Info "Jobs successfully disabled"
 }
 
+function Update-JobsTargetServer($cnx, $cfg)
+{
+    $result = Select-Table -cnx $cnx -sql "SELECT target_server, r_object_id FROM dm_job_s"
+    try
+    {
+        $previousHost = 'FRCLDOAP01'
+        foreach ($row in $result.Rows)
+        {
+            $target = $row['target_server’].ToLower()
+            $end = '@' + $previousHost.ToLower()
+            if ($target.EndsWith($end))
+            {
+                $id = $row['r_object_id']
+                $new_target = $target.Substring(0, $target.Length - $end.Length) + '@' + $($cfg.resolve('env.COMPUTERNAME'))
+                $sql = "UPDATE dbo.dm_job_s SET target_server = '$new_target' WHERE r_object_id = '$id'"
+                Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+                Log-Info "Updated target server for job $id to $new_target"
+            }
+        }
+    }
+    finally
+    {
+        $result.Dispose()
+    }
+}
+
 <#
     Fixes mount points
 #>
-function Fix-MountPoint($cnx, $cfg)
+function Update-MountPoint($cnx, $cfg)
 {
     $sql = "
     BEGIN TRAN
@@ -425,7 +439,7 @@ function Fix-MountPoint($cnx, $cfg)
     Log-Info "Mount points successfully fixed"
 }
 
-function Fix-DmLocations($cnx, $cfg)
+function Update-DmLocations($cnx, $cfg)
 {
     $sql = "
     UPDATE dm_location_s SET 
@@ -442,7 +456,20 @@ function Fix-DmLocations($cnx, $cfg)
 }
 
 
-
+function Update-ServerConfig($cnx, $cfg)
+{
+    $sql =
+    "UPDATE dm_server_config_s
+    SET r_host_name = '$($cfg.resovle('env.COMPUTERNAME'))',
+    web_server_loc = '$($cfg.resovle('env.COMPUTERNAME'))'
+    WHERE r_object_id IN
+    (
+        SELECT r_object_id FROM dm_server_config_sv
+        WHERE object_name = '$($cfg.resolve('docbase.config'))' AND i_has_folder = 1
+    );"
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+    Log-Info "Server config successfully fixed"
+}
 
 
 function New-MigrationTables($cnx)
@@ -547,6 +574,22 @@ function Remove-MigrationTables($cnx)
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null       
     Log-Info "Migration tables deleted"
+}
+
+function Get-IndexDDL($cnx)
+{
+
+    [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | out-null
+    # get the server connection
+    $sc = new-object('Microsoft.SqlServer.Management.Common.ServerConnection')
+    $sc.ConnectionString = $cnx
+    # get the server now
+    $s = new-object ('Microsoft.SqlServer.Management.Smo.Server') $sc
+    $db = $s.Databases['DM_QUALITY_docbase']
+    $t = $db.Tables['dm_audittrail_s']
+    $idx = $t.Indexes['IX_rho_dm_audittrail_s_eventname']
+    $ddl = $idx.Script()
+
 }
 
 

@@ -960,9 +960,9 @@ function checkDB ($obj)
      $obj.resolve('docbase.name') + ': expected ' + $obj.resolve('docbase.id')
    }
   }
-  # saves the hexid: 6 digits representation
+  # saves the hexid: 8 digits representation
   [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
-  $hex = $val.ToString('x6')
+  $hex = $val.ToString('x8')
   $obj.docbase.hexid = $hex
 
  }
@@ -1070,7 +1070,7 @@ Add-Type -TypeDefinition $iniClassSrc
 
 function Log-Info($msg)
 {
-    Write-Output "=> $msg `r`n"
+    Write-Output "=> $msg"
 }
 
 

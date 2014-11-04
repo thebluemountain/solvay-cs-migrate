@@ -41,20 +41,22 @@ try
 
 
 
+
+
     # ----------- x- Remove migration temp tables ----------------
     
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
     {
-       Remove-MigrationTables -cnx $cnx  
+       Get-IndexDDL -cnx $cnx  
     }
     finally
     {
        if ($null -ne $cnx)
         {
-            $cnx.Close()
+           $cnx.Close()
         }
-    }
+   }
 } 
 catch 
 {     
