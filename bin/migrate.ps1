@@ -60,26 +60,16 @@ try
     $cfg = check $cfg  
 
     # Prepare migration temp tables 
-    $cnx = New-Connection $cfg.ToDbConnectionString()
-    try
-    {
-        if (Test-MigrationTables($cnx)) {
-            throw "Migration temporary tables already present"
-        }
-    }
-    finally
-    {
-       if ($null -ne $cnx)
-        {
-            $cnx.Close()
-        }
-    }
-    
-    # ---------------------- Apply modification to environnment prior to update ----------------------
     # Open ODBC connection
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
-    {   
+    {
+        # performs sanity checks against data held in database
+        if (Test-MigrationTables($cnx)) {
+            throw "Migration temporary tables already present"
+        }
+        Check-Locations -cnx $cnx -cfg $cfg       
+
         # managing the install owner name change
   
         # is there a change ?     
@@ -87,8 +77,12 @@ try
 
         if ($installOwnerChanged -ne [InstallOwnerChanges]::None)      
         {
-            # ensuring current user does not exists
-            Test-UserExists -cnx $cnx -cfg $cfg
+            # if we need to rename ...
+            if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
+            {
+                # ensuring current user does not exists
+                Test-UserExists -cnx $cnx -cfg $cfg
+            }
             # managing the change of install owner
             Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged                
         }
@@ -105,10 +99,7 @@ try
         # TODO - record & delete custom indexes
         
         # configuring registry
-        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
-
-        # creating initialization files    
-        Create-IniFiles($cfg)
+        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()       
 
         # updating service files
         Update-ServiceFile($cfg)
@@ -119,15 +110,13 @@ try
         # updating the list of installed docbase
         Update-DocbaseList($cfg)
         
-        # updating the server.ini file
-        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "install_owner", $cfg.resolve('user.name'))  
-        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "user_auth_target", $cfg.resolve('docbase.auth'))  
-
+        # creating initialization files    
+        Create-IniFiles($cfg)
+       
         # managing docbroker changes
         Update-Docbrokers($cfg)
 
         # managing file store changes
-        Check-Locations -cnx $cnx -cfg $cfg       
         Update-Locations -cnx $cnx -cfg $cfg
 
         # fixing some dm_location
@@ -139,10 +128,8 @@ try
         # Update Server config
         Update-ServerConfig -cnx $cnx -cfg $cfg
         
-
-        # TODO - updating app_server_uri in server config        
-
-
+        # Update app_server_uri in server config 
+        Update-AppServerURI -cnx $cnx -cfg $cfg 
      }
     finally
     {
