@@ -38,17 +38,17 @@ try
     Log-Info ("Migration script started on $startDate")
  
     #check for configuration path validity
-    $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr    
+    $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
     if ($pathErr)
     {
         throw $pathErr
     }   
     Log-Info("Configuration path: $configPath")
 
-    # 1.1: initialize the environment
-    $cfg = Initialize $configPath    
+    # initialize the environment
+    $cfg = Initialize $configPath
 
-    # 1.2: current current user's pwd
+    # current current user's pwd
     $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
     if ($null -eq $pwd)
     {
@@ -56,48 +56,20 @@ try
     }
     $cfg.user.pwd = $pwd
 
-    # 1.3: make sure the environment seems OK
+    # make sure the environment seems OK
     $cfg = check $cfg  
 
     # Prepare migration temp tables 
+    # Open ODBC connection
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
     {
+        # performs sanity checks against data held in database
         if (Test-MigrationTables($cnx)) {
             throw "Migration temporary tables already present"
         }
+        Check-Locations -cnx $cnx -cfg $cfg       
 
-       # New-MigrationTables -cnx $cnx  
-    }
-    finally
-    {
-       if ($null -ne $cnx)
-        {
-            $cnx.Close()
-        }
-    }
-    
-    # ------------------ 2- preparing the installation ------------------------
-
-    # 2.1- configuring registry
-    Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
-
-    # 2.2- creating initialization files    
-    Create-IniFiles($cfg)
-
-    # 2.3- updating service files
-    Update-ServiceFile($cfg)
-
-    # 2.4- creating service
-    New-DocbaseService $cfg.ToDocbaseService()
-
-    # 2.5- updating the list of installed docbase
-    Update-DocbaseList($cfg)
-        
-    # ----------------------  3- modifying installation to allow for starting in new environment -----------------
-    $cnx = New-Connection $cfg.ToDbConnectionString()
-    try
-    {   
         # managing the install owner name change
   
         # is there a change ?     
@@ -105,8 +77,12 @@ try
 
         if ($installOwnerChanged -ne [InstallOwnerChanges]::None)      
         {
-            # ensuring current user does not exists
-            Test-UserExists -cnx $cnx -cfg $cfg
+            # if we need to rename ...
+            if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
+            {
+                # ensuring current user does not exists
+                Test-UserExists -cnx $cnx -cfg $cfg
+            }
             # managing the change of install owner
             Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged                
         }
@@ -114,33 +90,55 @@ try
         {
             Log-Info("Install owner has not changed")
         }
-   
-        # updating the server.ini file  
-        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "install_owner", $cfg.resolve('user.name'))  
-        [iniFile]::WriteValue("$dctmCfgPath\server.ini", "SERVER_STARTUP", "user_auth_target", $cfg.resolve('docbase.auth'))  
+        # Disable all jobs and 
+        Disable-Jobs -cnx $cnx -cfg $cfg
+        
+        # Change target server on jobs
+        Update-JobsTargetServer -cnx $cnx -cfg $cfg
 
+        # Create the temporay table for custom indexes
+        Create-mig_indexesTable -cnx $cnx
+
+        # Save custom indexes definition in temp table and drop indexes
+        Save-CustomIndexes -cnx $cnx -cfg $cfg
+
+        # creating initialization files    
+        Create-IniFiles($cfg)
+        
+        # configuring registry
+        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()       
+
+        # updating service files
+        Update-ServiceFile($cfg)
+
+        # creating service
+        New-DocbaseService $cfg.ToDocbaseService()
+
+        # updating the list of installed docbase
+        Update-DocbaseList($cfg)
+        
+      
+       
         # managing docbroker changes
         Update-Docbrokers($cfg)
 
         # managing file store changes
-        Check-Locations -cnx $cnx -cfg $cfg       
         Update-Locations -cnx $cnx -cfg $cfg
 
-        # disabling all jobs
-        Disable-Jobs -cnx $cnx -cfg cfg
+        # fixing some dm_location
+        Update-DmLocations -cnx $cnx -cfg $cfg       
 
         # Fix mount points
-        Fix-MountPoint -cnx $cnx -cfg $cfg
+        Update-MountPoint -cnx $cnx -cfg $cfg
        
-        # fixing some dm_location
-        Fix-DmLocations -cnx $cnx -cfg $cfg
+        # Update Server config
+        Update-ServerConfig -cnx $cnx -cfg $cfg
+        
+        # Update app_server_uri in server config 
+        Update-AppServerURI -cnx $cnx -cfg $cfg 
 
-        # TODO - updating app_server_uri in server config        
-
-        # TODO - Managing target server change
-
-        # TODO - Managing custom indexes
-     }
+       
+    }
     finally
     {
         if ($null -ne $cnx)

@@ -50,7 +50,7 @@ function createDynaObj ()
   # adds method 'ToDocbaseRegistry'
  $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDocbaseRegistry -Value {
   .{
-   $result = (asDocbaseRegistry $this $this '')
+   $result = (asDocbaseRegistry $this)
    return $result
   } @args
  } -Passthru
@@ -58,7 +58,7 @@ function createDynaObj ()
   # adds method 'ToDocbaseService'
  $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDocbaseService -Value {
   .{
-   $result = (asDocbaseService $this $this '')
+   $result = (asDocbaseService $this)
    return $result
   } @args
  } -Passthru
@@ -66,7 +66,7 @@ function createDynaObj ()
    # adds method 'ToDbConnectionString'
  $obj = Add-Member -InputObject $obj -MemberType ScriptMethod -Name ToDbConnectionString -Value {
   .{
-   $result = (asDbConnectionString $this $this '')
+   $result = (asDbConnectionString $this)
    return $result
   } @args
  } -Passthru
@@ -660,6 +660,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.rdbms = 'SQLServer'
  $docbase.service = '${' + $ini + '.SERVER_STARTUP.service}'
  $docbase.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
+ $docbase.config_folder = '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}'
 
  # the configuration for daemon
  $docbase.daemon = createObj
@@ -764,6 +765,9 @@ function Initialize ($path)
  $config.ini = $ini
  $config.user = $user
  $config = getDocbaseProps $config $file.migrate
+
+ 
+
  return $config
 }
 
@@ -853,6 +857,11 @@ function checkObj ($obj)
  {
   throw 'leading or trailing spaces in value for docbase.previous.host: ''' + $val + ''''
  }
+ # make sure we have location (re)definition
+ if (-not $cfg.ContainsKey('location')) {
+  throw 'No entries for file store mapping defined in migrate.properties'
+ }
+
  # ... TODO: make other tests: the more we make here, 
  # the faster user will know about mistakes
  return $obj
@@ -926,8 +935,11 @@ function checkEnv ($obj)
  }
  # this is currently commented as i don't have the docbroker yet
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
- $val = & 'dmqdocbroker'  '-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','ping' 2>&1 | select-string -pattern '^Successful reply from docbroker at host'
- if ((!$val) -or (0 -eq $val.length))
+ $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','ping')
+ Log-Verbose $params
+ $res = & 'dmqdocbroker'  $params 2>&1
+ $val = $res | select-string -pattern '^Successful reply from docbroker at host' -quiet
+ if (!$val) 
  {
   throw 'there is no docbroker running on host ' + 
    $obj.resolve('env.COMPUTERNAME') + 
@@ -936,9 +948,12 @@ function checkEnv ($obj)
  else
  {
   # make sure there is no server for name ${cfg.docbase.name} on docbroker
-  $val = & 'dmqdocbroker' '-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','getservermap',$obj.resolve('docbase.name') 2>&1 | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:'
-  if (($val) -and (0 -lt $val.length))
-  {
+  $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','getservermap',$obj.resolve('docbase.name'))
+  Log-Verbose $params
+  $res = & 'dmqdocbroker'  $params 2>&1
+  $val = $res | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:' -quiet
+  if (!$val)
+ {
    throw 'there is already a docbase ' + 
    $obj.resolve('docbase.name') + 
    '. registered on the docbroker'

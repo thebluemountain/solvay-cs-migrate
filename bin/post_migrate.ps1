@@ -38,23 +38,26 @@ try
     }   
     Log-Info "Configuration path: $configPath"
     $cfg = Initialize $configPath    
-
-
-
-    # ----------- x- Remove migration temp tables ----------------
-    
+  
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
-    {
-       Remove-MigrationTables -cnx $cnx  
+    {         
+        # Recreate indexes from definition stored in temp table   
+        #Restore-CustomIndexes -cnx $cnx
+
+        # Re-activate jobs
+        #Restore-ActiveJobs -cnx $cnx
+
+        # Remove temporary mig tables
+        Remove-MigrationTables -cnx $cnx      
     }
     finally
     {
        if ($null -ne $cnx)
         {
-            $cnx.Close()
+           $cnx.Close()
         }
-    }
+   }
 } 
 catch 
 {     
