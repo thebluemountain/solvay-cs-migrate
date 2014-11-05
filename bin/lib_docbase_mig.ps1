@@ -622,29 +622,186 @@ function Test-MigrationTables($cnx)
 }
 
 function Remove-MigrationTables($cnx)
-{
-    $sql = "DROP TABLE 'dbo.mig_active_jobs',
-                       'dbo.mig_user',
-                       'dbo.mig_indexes',
-                       'mig_locations'"
+{  
+    Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_user' | Out-Null
+    Log-Verbose 'Table dbo.mig_user successfully dropped'
 
-    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null       
+    Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_locations' | Out-Null
+    Log-Verbose 'Table dbo.mig_locations successfully dropped'
+    
+    $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_indexes'
+    if ($n -eq 0)
+    {
+        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_indexes' | Out-Null
+        Log-Verbose 'Table dbo.mig_indexes successfully dropped'
+    }
+
+    $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_active_jobs'
+    if ($n -eq 0)
+    {
+        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_active_jobs' | Out-Null      
+        Log-Verbose 'Table dbo.mig_active_jobs successfully dropped'
+    }
+     
     Log-Info "Migration tables deleted"
 }
 
-function Get-IndexDDL($cnxStr)
+function Create-mig_indexesTable()
 {
+    $sql =
+    'CREATE TABLE dbo.mig_indexes (
+        table_name nvarchar(128) NOT NULL,
+        index_name nvarchar(128) NOT NULL,
+        ddl nvarchar(4000) NOT NULL
+    )
+    CREATE UNIQUE NONCLUSTERED INDEX mig_indexes_key 
+    ON dbo.mig_indexes (table_name, index_name)'
 
-    [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | out-null
-    # get the server connection
-    $sc = new-object('Microsoft.SqlServer.Management.Common.ServerConnection')
-    $sc.ConnectionString = $cnxStr
-    # get the server now
-    $s = new-object ('Microsoft.SqlServer.Management.Smo.Server') $sc
-    $db = $s.Databases['DM_QUALITY_docbase']
-    $t = $db.Tables['dm_audittrail_s']
-    $idx = $t.Indexes['IX_rho_dm_audittrail_s_eventname']
-    $ddl = $idx.Script()
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
 }
 
 
+function Save-CustomIndexes($cnx, $cfg)
+{
+    $dbname = $cnx.database
+    $dbuser = $cfg.resolve('docbase.user')
+    $dbpwd = $cfg.resolve('docbase.pwd')
+    $dbserver = $cnx.Datasource
+
+    $sql =
+    "
+    SELECT
+     o.name AS table_name
+     , i.name AS index_name
+     , i.is_unique
+    from
+     $dbname.sys.indexes i
+     , $dbname.sys.objects o
+     , $dbname.sys.schemas s
+    where
+    (
+     (i.object_id = o.object_id)
+     AND (o.schema_id = s.schema_id )
+     AND (o.type = 'U')
+     AND (s.name = 'dbo')
+     AND (i.name IS NOT NULL)
+     AND (i.name NOT IN (SELECT name FROM $dbname.dbo.dmi_index_s))
+     AND (o.name NOT IN ('dm_dd_root_types', 'dm_dd_special_attrs', 'dm_federation_log', 'dm_message_route', 'dm_replica_catalog', 'dm_replica_delete', 'dm_replica_delete_info', 'dm_replication_events', 'dmi_object_type'))
+     AND (LOWER(o.name) IN
+      (
+       SELECT name + '_s' FROM $dbname.dbo.dm_type_s
+       UNION
+       SELECT name + '_r' FROM $dbname.dbo.dm_type_s
+      )
+     )
+    )
+    ORDER BY
+    o.name, i.name
+    "
+   
+    $result = Select-Table -cnx $cnx -sql $sql  
+    try
+    {               
+        [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | out-null
+
+       # Add-Type -AssemblyName 'Microsoft.SqlServer.Smo, Version=9.0.242.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
+        # get the server connection
+        $sc = New-Object Microsoft.SqlServer.Management.Common.ServerConnection
+        $sc.ConnectionString = "server=$dbserver; uid=$dbuser; password=$dbpwd; database=$dbname;"
+        try
+        {
+            # get the server now
+            $server = New-Object Microsoft.SqlServer.Management.Smo.Server -ArgumentList $sc
+
+             $sql = 'BEGIN TRAN;'                
+
+            foreach ($row in $result.Rows)
+            {
+                $tableName = $row['table_name']
+                $indexName = $row['index_name']
+                $table = $server.Databases[$dbname].Tables[$tableName]
+                $idx = $table.Indexes[$indexName]
+                $ddl = $idx.Script()
+                $sql =  $sql +
+                "INSERT INTO dbo.mig_indexes VALUES (N'$tableName', N'$indexName', N'$ddl');
+                DROP INDEX [$indexName] ON [dbo].[$tableName];"              
+                Log-Verbose "Successfully saved definition for index $indexName of table $tableName"
+            }
+            
+            $sql = $sql + 'COMMIT TRAN;'
+            Execute-NonQuery -cnx $cnx -sql $sql            
+        }
+        finally
+        {
+            $sc.Disconnect()
+        }
+
+        Log-Info "Successfully saved $($result.Rows.Count) custom index(es)"
+    }
+    finally
+    {
+        $result.Dispose()
+    }   
+}
+
+function Restore-CustomIndexes($cnx, $cfg)
+{
+    $results = Select-Table -cnx $cnx -sql 'SELECT * from dbo.mig_indexes'
+    try
+    {
+       
+        foreach($row in $results.Rows)
+        {
+            $indexName = $row['index_name']
+            $tableName = $row['table_name']
+            $indexDef = $row['ddl']       
+            $sql =  "
+            BEGIN TRAN; 
+            $indexDef
+            DELETE FROM dbo.mig_indexes 
+             WHERE index_name = '$indexName' 
+             AND table_name = '$tableName';
+            COMMIT TRAN"
+            try
+            {
+                Execute-NonQuery -cnx $cnx -sql $sql 
+                Log-Verbose "Successfully restored index $indexName on table $tableName"
+            }
+            catch [System.Data.Odbc.OdbcException]
+            {
+                Log-Warning "Error while restoring index $indexName on table $tableName - $($_.Exception.Message)"
+            }
+        }
+        Log-Info "Successfully restored $($results.Rows.Count) index(es)"
+    }
+    finally
+    {
+        $results.Dispose()
+    }
+}
+
+function Restore-ActiveJobs($cnx)
+{
+    $results = Select-Table -cnx $cnx -sql 'SELECT r_object_id FROM dbo.mig_active_jobs'
+    try
+    {
+        foreach ($row in $results)
+        {
+            $id = $row['r_object_id']
+            $sql = "
+            BEGIN TRAN
+            UPDATE dbo.dm_job_s SET is_inactive = 0 WHERE r_object_id = '$id';
+            DELETE FROM dbo.mig_indexes
+             WHERE r_object_id = '$id';
+            COMMIT TRAN;
+            "
+            Execute-NonQuery -cnx $cnx -sql $sql | Out-Null      
+            Log-Verbose "Restored active job $id"
+        }
+        Log-Info "Successfully restored $($results.Rows.Count) active job(s)"       
+    }
+    finally
+    {
+        $results.Dispose()
+    }
+}

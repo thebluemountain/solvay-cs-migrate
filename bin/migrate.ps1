@@ -96,7 +96,14 @@ try
         # Change target server on jobs
         Update-JobsTargetServer -cnx $cnx -cfg $cfg
 
-        # TODO - record & delete custom indexes
+        # Create the temporay table for custom indexes
+        Create-mig_indexesTable -cnx $cnx
+
+        # Save custom indexes definition in temp table and drop indexes
+        Save-CustomIndexes -cnx $cnx -cfg $cfg
+
+        # creating initialization files    
+        Create-IniFiles($cfg)
         
         # configuring registry
         Write-DocbaseRegKey $cfg.ToDocbaseRegistry()       
@@ -110,8 +117,7 @@ try
         # updating the list of installed docbase
         Update-DocbaseList($cfg)
         
-        # creating initialization files    
-        Create-IniFiles($cfg)
+      
        
         # managing docbroker changes
         Update-Docbrokers($cfg)
@@ -130,7 +136,9 @@ try
         
         # Update app_server_uri in server config 
         Update-AppServerURI -cnx $cnx -cfg $cfg 
-     }
+
+       
+    }
     finally
     {
         if ($null -ne $cnx)
