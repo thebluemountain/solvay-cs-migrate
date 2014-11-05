@@ -924,9 +924,9 @@ function checkEnv ($obj)
  {
   throw 'missing docbase.pwd property'
  }
- <# this is currently commented as i don't have the docbroker yet
+ # this is currently commented as i don't have the docbroker yet
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
- $val = & 'dmqdocbroker'  '-t',$obj.resolve('docbase.docbroker.host'),'-p',$obj.resolve('docbase.docbroker.port'),'-c','ping' 2>&1 | select-string -pattern '^Successful reply from docbroker at host'
+ $val = & 'dmqdocbroker'  '-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','ping' 2>&1 | select-string -pattern '^Successful reply from docbroker at host'
  if ((!$val) -or (0 -eq $val.length))
  {
   throw 'there is no docbroker running on host ' + 
@@ -936,7 +936,7 @@ function checkEnv ($obj)
  else
  {
   # make sure there is no server for name ${cfg.docbase.name} on docbroker
-  $val = & 'dmqdocbroker' '-t',$obj.resolve('docbase.docbroker.host'),'-p',$obj.resolve('docbase.docbroker.port'),'-c','isaserveropen',$obj.resolve('docbase.name') 2>&1 | select-string -pattern '^Open servers for docbase:'
+  $val = & 'dmqdocbroker' '-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','getservermap',$obj.resolve('docbase.name') 2>&1 | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:'
   if (($val) -and (0 -lt $val.length))
   {
    throw 'there is already a docbase ' + 
@@ -944,7 +944,6 @@ function checkEnv ($obj)
    '. registered on the docbroker'
   }
  }
- #>
  Write-Host 'docbroker access checked...'
  return $obj
 }
