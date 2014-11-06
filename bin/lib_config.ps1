@@ -746,6 +746,7 @@ function Initialize ($path)
  }
  # builds the file
  $file = createObj
+ $file.config_folder = $path
  $file.server_ini = $path + '\server.ini'
  $file.dbpasswd_txt = $path + '\dbpasswd.txt'
  $file.migrate = $path + '\migrate.properties'
@@ -1106,7 +1107,7 @@ $iniClassSrc = "
             return temp.ToString();
         }
     }"
-Add-Type -TypeDefinition $iniClassSrc 
+Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 
 function Log-Info($msg)

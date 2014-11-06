@@ -47,6 +47,7 @@ function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {       
     Log-Verbose "Execute-NonQuery - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
+    $command.CommandTimeout = 60
     $command.CommandText  = $sql
     $count = $command.ExecuteNonQuery()
     Log-Verbose "$count row(s) affected"
@@ -61,6 +62,7 @@ function Execute-Scalar ($cnx, $sql)
 {  
     Log-Verbose "Execute-Scalar - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
+    $command.CommandTimeout = 60
     $command.CommandText  = $sql
     $result = $command.ExecuteScalar()
     Log-Verbose "Result = $result"
