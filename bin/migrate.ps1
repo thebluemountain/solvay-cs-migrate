@@ -6,7 +6,7 @@ param (
 
 if ($null -eq $PSScriptRoot)
 {
-    $PSScriptRoot = (Split-Path $.MyCommand.Path -Parent)
+    $PSScriptRoot = (Split-Path $MyInvocation.MyCommand.Path -Parent)
 }
 
 try
