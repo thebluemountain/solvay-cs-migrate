@@ -43,10 +43,10 @@ try
     try
     {         
         # Recreate indexes from definition stored in temp table   
-        #Restore-CustomIndexes -cnx $cnx
+        Restore-CustomIndexes -cnx $cnx
 
         # Re-activate jobs
-        #Restore-ActiveJobs -cnx $cnx
+        Restore-ActiveJobs -cnx $cnx
 
         # Remove temporary mig tables
         Remove-MigrationTables -cnx $cnx      

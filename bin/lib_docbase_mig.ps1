@@ -1,20 +1,20 @@
-﻿# loading the assembly
+# loading the assembly
 try
 {
- Add-Type -AssemblyName 'Microsoft.SqlServer.Smo'
+    Add-Type -AssemblyName 'Microsoft.SqlServer.Smo'
 }
 catch
 {
- Add-Type -AssemblyName 'Microsoft.SqlServer.Smo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
+    Add-Type -AssemblyName 'Microsoft.SqlServer.Smo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
 }
 
 try
 {
- Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo'
+    Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo'
 }
 catch
 {
- Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
+    Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
 }
 
 <#
@@ -41,7 +41,7 @@ function Write-DocbaseRegKey( $obj)
     Log-Info "Reg key $out successfully created"
     foreach ($name in $obj.Keys)
     {
-        if ('path' -ne $name.ToLowerCase())
+        if ('path' -ne $name.ToLower())
         {
             $value = $obj.($name)
             $out = New-ItemProperty -Path $obj.Path -Name $name -PropertyType String -Value $value
@@ -80,17 +80,27 @@ function Create-IniFiles($cfg)
     $ini = $cfg.resolve('docbase.daemon.ini')
     New-Item -Path $inipath -ItemType "directory" -Force | Out-Null
     Copy-Item -Path $cfg.resolve('file.server_ini') -Destination $ini | Out-Null
+    Log-Verbose ('server.ini file successfully created in ' + $inipath)
+
+    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination ($inipath + '\dbpasswd.txt') | Out-Null
+    Log-Verbose ('dbpasswd.txt file successfully copied into ' + $inipath)
+    New-Item -Path $inipath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null
+    Log-Verbose ('dbpasswd.tmp.txt file successfully created in ' + $inipath)
+
+    Copy-Item -Path "$($cfg.file.config_path)\*.cnt" -Destination $inipath | Out-Null
+    Log-Verbose ('copied .cnt files into ' + $inipath)
 
     # updating the server.ini file
-    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_password_file', "$dctmCfgPath\dbpasswd.tmp.txt")
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_password_file', "$inipath\dbpasswd.tmp.txt")
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'install_owner', $cfg.resolve('user.name'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'user_auth_target', $cfg.resolve('docbase.auth'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_name', $cfg.resolve('docbase.database'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_conn', $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_owner', $cfg.resolve('docbase.user'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'start_index_agents', 'F')
+    Log-Verbose ('configured the server.ini file')
 
-    Log-Info("Ini files successfully created in $dctmCfgPath")
+    Log-Info ("initialization files successfully created in $inipath")
 }
 
 
@@ -750,7 +760,7 @@ function Save-CustomIndexes($cnx, $cfg)
             }
 
             $sql = $sql + 'COMMIT TRAN;'
-            Execute-NonQuery -cnx $cnx -sql $sql
+            Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
         }
         finally
         {
@@ -770,6 +780,7 @@ function Restore-CustomIndexes($cnx, $cfg)
     $results = Select-Table -cnx $cnx -sql 'SELECT * from dbo.mig_indexes'
     try
     {
+        $indexRestored = 0   
         foreach($row in $results.Rows)
         {
             $indexName = $row['index_name']
@@ -784,15 +795,16 @@ function Restore-CustomIndexes($cnx, $cfg)
             COMMIT TRAN"
             try
             {
-                Execute-NonQuery -cnx $cnx -sql $sql 
+                Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+                $indexRestored = $indexRestored + 1
                 Log-Verbose "Successfully restored index $indexName on table $tableName"
             }
-            catch [System.Data.Odbc.OdbcException]
+            catch
             {
                 Log-Warning "Error while restoring index $indexName on table $tableName - $($_.Exception.Message)"
             }
         }
-        Log-Info "Successfully restored $($results.Rows.Count) index(es)"
+        Log-Info "Successfully restored $indexRestored index(es)"
     }
     finally
     {
@@ -811,7 +823,7 @@ function Restore-ActiveJobs($cnx)
             $sql = "
             BEGIN TRAN
             UPDATE dbo.dm_job_s SET is_inactive = 0 WHERE r_object_id = '$id';
-            DELETE FROM dbo.mig_indexes
+            DELETE FROM dbo.mig_active_jobs
              WHERE r_object_id = '$id';
             COMMIT TRAN;
             "

@@ -1,5 +1,9 @@
-﻿
-<# ODBC/SQL related methods #>
+﻿<# ODBC/SQL related methods #>
+
+# The value in second used as time out for ODBC commands
+# Should be big enough to cater for long operation such as index creation
+$ODBC_COMMAND_TIME_OUT = 300
+
 <#
  the function that returns an opened connection to the database
  @cnxString: The connection string to the DB
@@ -47,6 +51,7 @@ function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {       
     Log-Verbose "Execute-NonQuery - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
+    $command.CommandTimeout = $ODBC_COMMAND_TIME_OUT
     $command.CommandText  = $sql
     $count = $command.ExecuteNonQuery()
     Log-Verbose "$count row(s) affected"
@@ -61,6 +66,7 @@ function Execute-Scalar ($cnx, $sql)
 {  
     Log-Verbose "Execute-Scalar - SQL Statement: $sql"
     $command = $cnx.CreateCommand()
+    $command.CommandTimeout = $ODBC_COMMAND_TIME_OUT
     $command.CommandText  = $sql
     $result = $command.ExecuteScalar()
     Log-Verbose "Result = $result"
