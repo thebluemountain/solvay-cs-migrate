@@ -277,7 +277,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
         user_os_domain = '$newUserDomain',
         user_login_name = '$newUserName',
         user_login_domain = '$newUserDomain',
-        user_source = '',
+        user_source = ' ',
         user_privileges = 16,
         user_state = 0 
     WHERE 
@@ -633,20 +633,22 @@ function New-MigrationTables($cnx)
 }
 #>
 
-function Test-MigrationTables($cnx)
+function Test-MigrationTables($cnx, $cfg)
 {
+    $catName = $cfg.revolve('docbase.database')
     $sql = "IF (EXISTS (SELECT *
-                 FROM INFORMATION_SCHEMA.TABLES
-                 WHERE TABLE_SCHEMA = 'dbo'
-                 AND  (
-                    TABLE_NAME = 'mig_active_jobs'
-                    OR TABLE_NAME = 'mig_user'
-                    OR TABLE_NAME = 'mig_indexes'
-                   )))
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = 'dbo'
+             AND  (
+                TABLE_NAME = 'mig_active_jobs'
+                OR TABLE_NAME = 'mig_user'
+                OR TABLE_NAME = 'mig_indexes'
+               )
+               AND TABLE_CATALOG = '$catName'))
             SELECT 1 AS res ELSE SELECT 0 AS res;"
 
     $r = Execute-Scalar -cnx $cnx -sql $sql
-    if ($sql -eq 1) {
+    if ($r -eq 1) {
         return $true
     }
     return $false
@@ -656,9 +658,6 @@ function Remove-MigrationTables($cnx)
 {
     Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_user' | Out-Null
     Log-Verbose 'Table dbo.mig_user successfully dropped'
-
-    Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_locations' | Out-Null
-    Log-Verbose 'Table dbo.mig_locations successfully dropped'
 
     $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_indexes'
     if ($n -eq 0)
@@ -916,7 +915,7 @@ WHERE
       if (-not (test-path $filepath))
       {
        #$inerror = true
-       Log-Warning 'file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top
+       Log-Warning ('file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top)
       }
     }
     if ($inerror)

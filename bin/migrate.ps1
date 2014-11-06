@@ -65,7 +65,9 @@ try
     try
     {
         # performs sanity checks against data held in database
-        if (Test-MigrationTables($cnx)) {
+        $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
+        if ($migCheck) 
+        {
             throw "Migration temporary tables already present"
         }
         Check-Locations -cnx $cnx -cfg $cfg

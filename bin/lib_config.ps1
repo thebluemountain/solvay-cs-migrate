@@ -1109,22 +1109,22 @@ Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 function Log-Info($msg)
 {
-    Write-Output $msg
+    Write-Output ('' + $msg)
 }
 
 function Log-Warning($msg)
 {
-    Write-Warning ('w?' + $msg)
+    Write-Warning ('' + $msg)
 }
 
 function Log-Error($msg)
 {
-    Write-Error ('e!' + $msg)
+    Write-Error ('' + $msg)
 }
 
 
 function Log-Verbose($msg)
 {
-    Write-Verbose ('v:' + $msg)
+    Write-Verbose ('' + $msg)
 }
 
