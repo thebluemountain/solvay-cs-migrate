@@ -1,4 +1,4 @@
-<# 
+<#
  Contains functions to store, manage and verify the configuration settings for the migration
 #>
 
@@ -18,7 +18,7 @@ function createObj ()
 }
 
 <#
- creates an object with a dump() method that displays as json object, 
+ creates an object with a dump() method that displays as json object,
  a resolve($key) that resolves the key value replacing any ${xx} with 
  resolved value and a show() method that displays the list of all resolved 
  properties
@@ -186,7 +186,6 @@ function LoadIniFile ($ini, $filePath)
   elseif ($line -match '^\[(.*)\]$')
   {
    $currentkey = $matches[1]
-   #$ini.($currentkey) = 
    $tmp = getObjOf $ini $currentkey $true
   }
   elseif ($line -match '^(.*)=(.*)$')
@@ -200,7 +199,7 @@ function LoadIniFile ($ini, $filePath)
    $value = $matches[2].Trim()
    $ini.($currentkey).($entry) = $value
   }
- }   
+ }
 }
 
 <#
@@ -766,8 +765,6 @@ function Initialize ($path)
  $config.user = $user
  $config = getDocbaseProps $config $file.migrate
 
- 
-
  return $config
 }
 
@@ -939,7 +936,7 @@ function checkEnv ($obj)
  Log-Verbose $params
  $res = & 'dmqdocbroker'  $params 2>&1
  $val = $res | select-string -pattern '^Successful reply from docbroker at host' -quiet
- if (!$val) 
+ if (!$val)
  {
   throw 'there is no docbroker running on host ' + 
    $obj.resolve('env.COMPUTERNAME') + 
@@ -972,7 +969,7 @@ function checkDB ($obj)
 <#
 - make sure there i can connect to $obj.docbase.dsn (in database $obj.docbase.database ?) with 
   login $obj.docbase.user using password $obj.docbase.pwd 
-  and: SELECT r_object_id, docbase_id FROM dm_docbase_config_sv WHERE i_hasfolder = 1 AND object_name = '${cfg.docbase.name}'   
+  and: SELECT r_object_id, docbase_id FROM dm_docbase_config_sv WHERE i_hasfolder = 1 AND object_name = '${cfg.docbase.name}' 
   returns 1 line only with docbase_id matching ${cfg.docbase.id}.
   ${cfg.docbase.hexid} is set to SUBSTR (r_object_id, 2, 8)
 #>
@@ -1072,8 +1069,8 @@ function asDocbaseService($obj)
     $svc = createObj
     $svc.name = $obj.resolve('docbase.daemon.name')
     $svc.display = $obj.resolve('docbase.daemon.display')
-    $svc.commandLine = $obj.resolve('docbase.daemon.cmd')  
-    $usr = $obj.resolve('user.domain') + '\'+ $obj.resolve('user.name')    
+    $svc.commandLine = $obj.resolve('docbase.daemon.cmd')
+    $usr = $obj.resolve('user.domain') + '\'+ $obj.resolve('user.name')
     $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.user.pwd)
     return $svc
 }
@@ -1083,7 +1080,7 @@ function asDocbaseService($obj)
 #>
 function asDbConnectionString($obj)
 {
-    $cnxstring = 'dsn=' + $obj.resolve('docbase.dsn') + ';uid=' + $obj.resolve('docbase.user') + ';pwd=' + $obj.resolve('docbase.pwd')    
+    $cnxstring = 'dsn=' + $obj.resolve('docbase.dsn') + ';uid=' + $obj.resolve('docbase.user') + ';pwd=' + $obj.resolve('docbase.pwd')
     return $cnxstring
 }
 
@@ -1106,7 +1103,7 @@ $iniClassSrc = "
             return temp.ToString();
         }
     }"
-Add-Type -TypeDefinition $iniClassSrc 
+Add-Type -TypeDefinition $iniClassSrc
 
 
 function Log-Info($msg)

@@ -1,4 +1,5 @@
-﻿﻿try
+﻿# loading the assembly
+try
 {
  Add-Type -AssemblyName 'Microsoft.SqlServer.Smo'
 }
@@ -18,7 +19,7 @@ catch
 
 <#
     Creates the registry key and entries related to the docbase
-    As the 'path' key in the object holds special meaning, its content 
+    As the 'path' key in the object holds special meaning, its content
     is not copied
 #>
 function Write-DocbaseRegKey( $obj)
@@ -28,7 +29,7 @@ function Write-DocbaseRegKey( $obj)
         throw "Argument obj cannot be null"
     }
 
-    $dmp = _DumpObjAt $obj 
+    $dmp = _DumpObjAt $obj
     Log-Verbose "Reg object=$dmp"
 
     if (test-path $obj.Path)
@@ -59,11 +60,11 @@ function New-DocbaseService($obj)
     {
        throw "Argument obj cannot be null"
     }
-   
+
     if (Test-DocbaseService $obj.name)
     {
         throw "The docbase service $($obj.name) already exists"
-    }   
+    }
     $out = New-Service -Name $obj.name -DisplayName $obj.display -StartupType Automatic -BinaryPathName $obj.commandLine -Credential $obj.credentials
     Log-Verbose $out
     Log-Info "Docbase service $($obj.name) successfully created."
@@ -75,17 +76,15 @@ function New-DocbaseService($obj)
 #> 
 function Create-IniFiles($cfg)
 {
-    $dctmCfgPath = $cfg.resolve('docbase.config_folder')
+    $inipath = $cfg.resolve('docbase.config_folder')
     $ini = $cfg.resolve('docbase.daemon.ini')
-    New-Item -Path $dctmCfgPath -ItemType "directory" -Force | Out-Null
+    New-Item -Path $inipath -ItemType "directory" -Force | Out-Null
     Copy-Item -Path $cfg.resolve('file.server_ini') -Destination $ini | Out-Null
-    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination "$dctmCfgPath\dbpasswd.txt" | Out-Null
-    New-Item -Path $dctmCfgPath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null
-    
+
     # updating the server.ini file
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_password_file', "$dctmCfgPath\dbpasswd.tmp.txt")
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'install_owner', $cfg.resolve('user.name'))
-    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'user_auth_target', $cfg.resolve('docbase.auth')) 
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'user_auth_target', $cfg.resolve('docbase.auth'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_name', $cfg.resolve('docbase.database'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_conn', $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_owner', $cfg.resolve('docbase.user'))
@@ -95,7 +94,7 @@ function Create-IniFiles($cfg)
 }
 
 
-<# 
+<#
     Updates service files
 #>
 function Update-ServiceFile($cfg)
@@ -127,7 +126,7 @@ function Update-DocbaseList($cfg)
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.previous.version'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_NAME", $cfg.resolve('docbase.database'))
-    
+
     Log-Info("List of installed docbase successfully updated in $dm_dctm_cfg")
 }
 
@@ -153,7 +152,7 @@ function Test-DocbaseService($name)
     Returns the max port number used in the \etc\services file.
 #>
 function Get-MaxTcpPort($Path)
-{    
+{
     $regEx = '(?i)(?<svcname>[#\w\d]+)\s*(?<svcport>[0-9]+)\/tcp'
     $text = Get-Content $Path -Raw
     [Uint16]$maxTcpPort = 0
@@ -240,7 +239,7 @@ function Test-UserExists($cnx, $cfg)
         OR (user_os_name = '$newUserName') 
         OR (user_login_name = '$newUserName') 
     )"
-   
+
     $r = Execute-Scalar -cnx $cnx -sql $query
     if ($null -ne $r)
     {
@@ -277,7 +276,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
 
     if ($scope -band [InstallOwnerChanges]::Name)
     {
-        $sql = $sql +  
+        $sql = $sql + 
         "-- because we updated the user_name, used as pseudo-key in dctm, we need to update many other rows ...
         UPDATE dbo.dm_sysobject_s SET 
             owner_name = '$newUserName' 
@@ -341,9 +340,9 @@ function Test-LocationMigrated($cnx)
 
 <#
     Checks that all used stores are defined and point to a valid path
-#> 
+#>
 function Check-Locations($cnx, $cfg)
-{  
+{
     $query = '
         SELECT l.object_name
         FROM dbo.dmr_content_s c, dbo.dm_filestore_sv f, dbo.dm_location_sv l 
@@ -370,7 +369,7 @@ function Check-Locations($cnx, $cfg)
             Log-Verbose "Entry for location $loc found"
         }
     }
-    finally 
+    finally
     {
         $result.Dispose()
     }
@@ -399,7 +398,10 @@ function Check-Locations($cnx, $cfg)
         $result.Dispose()
     }
     Log-Info 'checked locations on DB & file system'
-    # TODO: (SLM-20141105) should warn for other dm_location relating to filestore 
+
+    # performs further check ...
+    Check-Contents $cnx $cfg
+    # TODO: (SLM-20141105) should warn for other dm_location relating to filestore
     # that will remain unchanged
 }
 
@@ -408,7 +410,7 @@ function Check-Locations($cnx, $cfg)
 #>
 function Update-Locations($cnx, $cfg)
 {
-    $sql =  "BEGIN TRAN;"   
+    $sql =  "BEGIN TRAN;"
     foreach ($loc in $cfg.location.Keys)
     {
         $sql = $sql +
@@ -432,7 +434,7 @@ function Disable-Jobs($cnx, $cfg)
     SELECT r_object_id INTO dbo.mig_active_jobs FROM dm_job_s WHERE is_inactive = 0;
     UPDATE dm_job_s SET is_inactive = 1 WHERE is_inactive = 0;
     COMMIT TRAN;'
-    
+
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
     Log-Info "Jobs successfully disabled"
 }
@@ -488,11 +490,11 @@ function Update-DmLocations($cnx, $cfg)
     UPDATE dm_location_s SET 
      file_system_path = '$($cfg.resolve('env.dm_home'))\convert'
     WHERE r_object_id IN (SELECT r_object_id FROM dm_location_sv WHERE object_name = 'convert'); 
- 
+
     UPDATE dm_location_s SET 
      file_system_path = '$($cfg.resolve('env.dm_home'))\install\external_apps\nls_chartrans'
     WHERE r_object_id IN (SELECT r_object_id FROM dm_location_sv WHERE object_name = 'nls_chartrans');"
-      
+
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
     Log-Info "Dm locations successfully fixed"
 }
@@ -555,7 +557,7 @@ function New-MigrationTables($cnx)
     'CREATE TABLE dbo.mig_active_jobs (
         r_object_id nchar(16) NOT NULL
      )
-            
+
      CREATE TABLE dbo.mig_user(
         r_object_id nchar(16) NOT NULL,
         user_name nvarchar(32) NOT NULL,
@@ -609,7 +611,7 @@ function New-MigrationTables($cnx)
         security_type nvarchar(32) NOT NULL,
         no_validation smallint NOT NULL
     )
-    
+
     CREATE TABLE dbo.mig_indexes (
         table_name nvarchar(128) NOT NULL,
         index_name nvarchar(128) NOT NULL,
@@ -644,13 +646,13 @@ function Test-MigrationTables($cnx)
 }
 
 function Remove-MigrationTables($cnx)
-{  
+{
     Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_user' | Out-Null
     Log-Verbose 'Table dbo.mig_user successfully dropped'
 
     Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_locations' | Out-Null
     Log-Verbose 'Table dbo.mig_locations successfully dropped'
-    
+
     $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_indexes'
     if ($n -eq 0)
     {
@@ -661,10 +663,10 @@ function Remove-MigrationTables($cnx)
     $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_active_jobs'
     if ($n -eq 0)
     {
-        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_active_jobs' | Out-Null      
+        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_active_jobs' | Out-Null
         Log-Verbose 'Table dbo.mig_active_jobs successfully dropped'
     }
-     
+
     Log-Info "Migration tables deleted"
 }
 
@@ -720,10 +722,10 @@ function Save-CustomIndexes($cnx, $cfg)
     ORDER BY
     o.name, i.name
     "
-   
-    $result = Select-Table -cnx $cnx -sql $sql  
+
+    $result = Select-Table -cnx $cnx -sql $sql
     try
-    {               
+    {
         # get the server connection
         $sc = New-Object Microsoft.SqlServer.Management.Common.ServerConnection
         $sc.ConnectionString = "server=$dbserver; uid=$dbuser; password=$dbpwd; database=$dbname;"
@@ -743,12 +745,12 @@ function Save-CustomIndexes($cnx, $cfg)
                 $ddl = $idx.Script()
                 $sql =  $sql +
                 "INSERT INTO dbo.mig_indexes VALUES (N'$tableName', N'$indexName', N'$ddl');
-                DROP INDEX [$indexName] ON [dbo].[$tableName];"              
+                DROP INDEX [$indexName] ON [dbo].[$tableName];"
                 Log-Verbose "Successfully saved definition for index $indexName of table $tableName"
             }
-            
+
             $sql = $sql + 'COMMIT TRAN;'
-            Execute-NonQuery -cnx $cnx -sql $sql            
+            Execute-NonQuery -cnx $cnx -sql $sql
         }
         finally
         {
@@ -760,7 +762,7 @@ function Save-CustomIndexes($cnx, $cfg)
     finally
     {
         $result.Dispose()
-    }   
+    }
 }
 
 function Restore-CustomIndexes($cnx, $cfg)
@@ -768,12 +770,11 @@ function Restore-CustomIndexes($cnx, $cfg)
     $results = Select-Table -cnx $cnx -sql 'SELECT * from dbo.mig_indexes'
     try
     {
-       
         foreach($row in $results.Rows)
         {
             $indexName = $row['index_name']
             $tableName = $row['table_name']
-            $indexDef = $row['ddl']       
+            $indexDef = $row['ddl']
             $sql =  "
             BEGIN TRAN; 
             $indexDef
@@ -814,13 +815,109 @@ function Restore-ActiveJobs($cnx)
              WHERE r_object_id = '$id';
             COMMIT TRAN;
             "
-            Execute-NonQuery -cnx $cnx -sql $sql | Out-Null      
+            Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
             Log-Verbose "Restored active job $id"
         }
-        Log-Info "Successfully restored $($results.Rows.Count) active job(s)"       
+        Log-Info "Successfully restored $($results.Rows.Count) active job(s)"
     }
     finally
     {
         $results.Dispose()
     }
+}
+
+function Check-Contents ($cnx, $obj)
+{
+  $servermark = $obj.resolve('docbase.hexid')
+  # make sure all contents are here
+  # we are retrieving the latest content of each stuff
+<#  $sql = 'SELECT f.r_object_id, l.file_system_path, c.data_ticket ' + 
+   'FROM dbo.dm_filestore_s f, dbo.dm_location_sv l, ' + 
+   '(SELECT storage_id, MAX(data_ticket) AS data_ticket FROM dmr_content_s GROUP BY storage_id) c ' + 
+   'WHERE ((c.storage_id = f.r_object_id) AND (l.object_name = f.root))'
+#>
+  $sql = 'SELECT
+ s.root
+ , l.file_system_path
+ , c.data_ticket
+ , f.dos_extension 
+FROM
+ dbo.dmr_content_s c
+ , dbo.dm_format_s f
+ , dbo.dm_filestore_s s
+ , dbo.dm_location_sv l
+ , (
+SELECT s.storage_id, MAX(s.data_ticket) AS data_ticket 
+FROM 
+ dbo.dmr_content_s s 
+ , dbo.dmr_content_r r 
+WHERE 
+ r.r_object_id = s.r_object_id 
+ AND r.i_position = -1 
+ AND r.parent_id <> ''0000000000000000'' 
+ AND s.storage_id <> ''0000000000000000'' 
+GROUP BY 
+ s.storage_id
+) m
+WHERE 
+(
+ (m.data_ticket = c.data_ticket)
+ AND (m.storage_id = c.storage_id)
+ AND (f.r_object_id = c.format)
+ AND (m.storage_id = s.r_object_id)
+ AND (s.root = l.object_name)
+)'
+
+  $inerror = $false
+  $results = Select-Table -cnx $cnx -sql $sql
+  try
+  {
+    foreach ($row in $results)
+    {
+      # compute the relative path matching the latest document
+      [System.Int32] $data_ticket = $row['data_ticket']
+      [System.UInt32]$value = 0;
+      if (0 -gt $data_ticket)
+      {
+        $value = [System.UInt32]::MaxValue + $data_ticket
+      }
+      else
+      {
+        $value = $data_ticket
+      }
+      $tmp = $value.ToString('x8')
+      $path = $tmp.Substring(0, 2) + '\' + $tmp.Substring(2, 2) + '\' + $tmp.Substring(4, 2) + '\' + $tmp.Substring(6, 2) + '.'
+      $ext = $row['dos_extension']
+      if ($ext)
+      {
+       # file might contains own extension
+       $path += $ext
+      }
+      # the top-level folder path: we've got the default from the server ...
+      $store = $row['root']
+
+      $top = $row['file_system_path']
+      if ($obj.location.ContainsKey($store))
+      {
+       # ... possibly redefined
+       $top = $obj.location.($store)
+      }
+      # OK, got the complete file name then
+      $filepath = $top + '\' + $servermark + '\' + $path
+      if (-not (test-path $filepath))
+      {
+       $inerror = true
+       Log-Warn 'file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top
+      }
+    }
+    if ($inerror)
+    {
+     throw 'database refer to file(s) that cannot be resolved'
+    }
+    Log-Info 'checked last content in docbase exists on file system'
+  }
+  finally
+  {
+    $results.Dispose()
+  }
 }

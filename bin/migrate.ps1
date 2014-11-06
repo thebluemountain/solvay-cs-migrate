@@ -1,12 +1,12 @@
 ﻿[CmdletBinding()]
-param (  
+param (
     [Parameter(Mandatory=$True)]
     [string]$configPath
     )
 
 if ($null -eq $PSScriptRoot)
 {
-    $PSScriptRoot = (Split-Path $MyInvocation.MyCommand.Path -Parent)
+    $PSScriptRoot = (Split-Path $.MyCommand.Path -Parent)
 }
 
 try
@@ -15,10 +15,10 @@ try
     $logDate = Get-Date -Format 'yyyyMMdd-HHmmss'
     $LogFileLocation = "$configPath\migration_log-$logDate.txt"
     try
-    {         
-        Start-Transcript -path $LogFileLocation -append  
+    {
+        Start-Transcript -path $LogFileLocation -append
     }
-    catch 
+    catch
     {
         Write-Warning "Unable to transcribe the current session to file ""$LogFileLocation"" : $($_.Exception.Message)"
     }
@@ -28,21 +28,21 @@ try
 
     # Include docbase registration functions
     . "$PSScriptRoot\lib_docbase_mig.ps1"
-     
+
     # Include database functions
     . "$PSScriptRoot\lib_database.ps1"
 
     # ------------------- 1- Validate environment --------------------
 
-    $startDate = Get-Date  -Verbose     
+    $startDate = Get-Date  -Verbose
     Log-Info ("Migration script started on $startDate")
- 
+
     #check for configuration path validity
     $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
     if ($pathErr)
     {
         throw $pathErr
-    }   
+    }
     Log-Info("Configuration path: $configPath")
 
     # initialize the environment
@@ -57,9 +57,9 @@ try
     $cfg.user.pwd = $pwd
 
     # make sure the environment seems OK
-    $cfg = check $cfg  
+    $cfg = check $cfg
 
-    # Prepare migration temp tables 
+    # Prepare migration temp tables
     # Open ODBC connection
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
@@ -68,14 +68,14 @@ try
         if (Test-MigrationTables($cnx)) {
             throw "Migration temporary tables already present"
         }
-        Check-Locations -cnx $cnx -cfg $cfg       
+        Check-Locations -cnx $cnx -cfg $cfg
 
         # managing the install owner name change
-  
-        # is there a change ?     
+
+        # is there a change ?
         $installOwnerChanged = Test-InstallOwnerChanged -cnx $cnx -cfg $cfg
 
-        if ($installOwnerChanged -ne [InstallOwnerChanges]::None)      
+        if ($installOwnerChanged -ne [InstallOwnerChanges]::None)
         {
             # if we need to rename ...
             if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
@@ -84,15 +84,15 @@ try
                 Test-UserExists -cnx $cnx -cfg $cfg
             }
             # managing the change of install owner
-            Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged                
+            Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged
         }
         else
         {
             Log-Info("Install owner has not changed")
         }
-        # Disable all jobs and 
+        # Disable all jobs and
         Disable-Jobs -cnx $cnx -cfg $cfg
-        
+
         # Change target server on jobs
         Update-JobsTargetServer -cnx $cnx -cfg $cfg
 
@@ -102,11 +102,11 @@ try
         # Save custom indexes definition in temp table and drop indexes
         Save-CustomIndexes -cnx $cnx -cfg $cfg
 
-        # creating initialization files    
+        # creating initialization files
         Create-IniFiles($cfg)
-        
+
         # configuring registry
-        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()       
+        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
 
         # updating service files
         Update-ServiceFile($cfg)
@@ -116,9 +116,7 @@ try
 
         # updating the list of installed docbase
         Update-DocbaseList($cfg)
-        
-      
-       
+
         # managing docbroker changes
         Update-Docbrokers($cfg)
 
@@ -126,18 +124,16 @@ try
         Update-Locations -cnx $cnx -cfg $cfg
 
         # fixing some dm_location
-        Update-DmLocations -cnx $cnx -cfg $cfg       
+        Update-DmLocations -cnx $cnx -cfg $cfg
 
         # Fix mount points
         Update-MountPoint -cnx $cnx -cfg $cfg
-       
+
         # Update Server config
         Update-ServerConfig -cnx $cnx -cfg $cfg
-        
-        # Update app_server_uri in server config 
-        Update-AppServerURI -cnx $cnx -cfg $cfg 
 
-       
+        # Update app_server_uri in server config
+        Update-AppServerURI -cnx $cnx -cfg $cfg
     }
     finally
     {
@@ -146,10 +142,10 @@ try
             $cnx.Close()
         }
     }
-} 
-catch 
-{     
-    # A fatal error has occured: the script will stop.  
+}
+catch
+{
+    # A fatal error has occured: the script will stop.
     Write-Error $_.Exception
     Write-Error $_.ScriptStackTrace
 }
