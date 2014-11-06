@@ -423,10 +423,8 @@ function Update-Locations($cnx, $cfg)
     $sql =  "BEGIN TRAN;"
     foreach ($loc in $cfg.location.Keys)
     {
-        $sql = $sql +
-            "SELECT * INTO dbo.mig_locations FROM dm_location_s 
-            WHERE r_object_id IN (SELECT r_object_id FROM dm_location_sv WHERE object_name = '$loc');
-            UPDATE dm_location_s SET file_system_path = '$($cfg.location.($loc))' 
+        $sql = $sql +           
+            "UPDATE dm_location_s SET file_system_path = '$($cfg.location.($loc))' 
             WHERE r_object_id IN (SELECT r_object_id FROM dm_location_sv WHERE object_name = '$loc');"
     }
     $sql = $sql + 'COMMIT TRAN;'
@@ -458,7 +456,7 @@ function Update-JobsTargetServer($cnx, $cfg)
         $previousHost = $cfg.resolve('docbase.previous.host')
         foreach ($row in $result.Rows)
         {
-            $target = $row['target_server’]
+            $target = $row['target_server']
             $end = '@' + $previousHost.ToLower()
             if ($target.ToLower().EndsWith($end))
             {
@@ -637,14 +635,13 @@ function New-MigrationTables($cnx)
 
 function Test-MigrationTables($cnx)
 {
-    $sql = "IF (EXISTS (SELECT * 
-                 FROM INFORMATION_SCHEMA.TABLES 
-                 WHERE TABLE_SCHEMA = 'dbo' 
+    $sql = "IF (EXISTS (SELECT *
+                 FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = 'dbo'
                  AND  (
                     TABLE_NAME = 'mig_active_jobs'
                     OR TABLE_NAME = 'mig_user'
-                    OR TABLE_NAME = 'mig_indexes' 
-                    OR TABLE_NAME = 'mig_locations'
+                    OR TABLE_NAME = 'mig_indexes'
                    )))
             SELECT 1 AS res ELSE SELECT 0 AS res;"
 
@@ -918,8 +915,8 @@ WHERE
       $filepath = $top + '\' + $servermark + '\' + $path
       if (-not (test-path $filepath))
       {
-       $inerror = true
-       Log-Warn 'file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top
+       #$inerror = true
+       Log-Warning 'file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top
       }
     }
     if ($inerror)

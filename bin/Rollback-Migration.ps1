@@ -98,7 +98,7 @@ BEGIN TRAN
 		grp.users_names = (SELECT user_name FROM dbo.restore_user);
 
 	-- Drop 
-	DROP TABLE dbo.restore_user, dbo.mig_user, dbo.mig_locations, mig_active_jobs
+	DROP TABLE dbo.restore_user, dbo.mig_user, mig_active_jobs
 	
 COMMIT TRAN;
 "
