@@ -953,7 +953,7 @@ function checkEnv ($obj)
   $res = & 'dmqdocbroker'  $params 2>&1
   $val = $res | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:' -quiet
   if (!$val)
- {
+  {
    throw 'there is already a docbase ' + 
    $obj.resolve('docbase.name') + 
    '. registered on the docbroker'
@@ -1045,7 +1045,9 @@ function asDocbaseRegistry ($obj)
 
  $reg = createObj
 
+ # the path should not be copied !!!
  $reg.Path = 'hklm:\SOFTWARE\Documentum\DOCBASES\' + $obj.resolve('docbase.name')
+
  $reg.DM_AUTH_LOCATION = $obj.resolve('docbase.auth')
  $reg.DM_DATABASE_NAME = $obj.resolve('docbase.database')
  $reg.DM_DOCBASE_CONNECTION = $obj.resolve('docbase.dsn')
@@ -1057,7 +1059,7 @@ function asDocbaseRegistry ($obj)
  $now = get-date
  $culture = new-object -Type System.Globalization.CultureInfo -ArgumentList 'en-US'
  $currentDate = $now.ToString('ddd MMM dd HH:mm:ss CEST yyyy', $culture)
- $reg.CONFIGURE_TIME = $currentDate
+ $reg.DM_CONFIGURE_TIME = $currentDate
  $reg.DM_SERVER_VERSION=$obj.resolve('docbase.previous.version')
  $reg.DOCUMENTUM=$obj.resolve('env.documentum')
 

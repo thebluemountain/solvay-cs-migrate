@@ -1,5 +1,25 @@
-﻿<#
+﻿﻿try
+{
+ Add-Type -AssemblyName 'Microsoft.SqlServer.Smo'
+}
+catch
+{
+ Add-Type -AssemblyName 'Microsoft.SqlServer.Smo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
+}
+
+try
+{
+ Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo'
+}
+catch
+{
+ Add-Type -AssemblyName 'Microsoft.SqlServer.ConnectionInfo, Version=10.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
+}
+
+<#
     Creates the registry key and entries related to the docbase
+    As the 'path' key in the object holds special meaning, its content 
+    is not copied
 #>
 function Write-DocbaseRegKey( $obj)
 {
@@ -20,9 +40,12 @@ function Write-DocbaseRegKey( $obj)
     Log-Info "Reg key $out successfully created"
     foreach ($name in $obj.Keys)
     {
-        $value = $obj.($name)
-        $out = New-ItemProperty -Path $obj.Path -Name $name -PropertyType String -Value $value
-        Log-Verbose "Reg entry $name = $value successfully created"
+        if ('path' -ne $name.ToLowerCase())
+        {
+            $value = $obj.($name)
+            $out = New-ItemProperty -Path $obj.Path -Name $name -PropertyType String -Value $value
+            Log-Verbose "Reg entry $name = $value successfully created"
+        }
     }
     Log-Info 'registry configuration successfully created'
 }
@@ -55,9 +78,9 @@ function Create-IniFiles($cfg)
     $dctmCfgPath = $cfg.resolve('docbase.config_folder')
     $ini = $cfg.resolve('docbase.daemon.ini')
     New-Item -Path $dctmCfgPath -ItemType "directory" -Force | Out-Null
-    Copy-Item -Path $cfg.resolve('file.server_ini') -Destination $ini | Out-Null  
-    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination "$dctmCfgPath\dbpasswd.txt" | Out-Null      
-    New-Item -Path $dctmCfgPath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null  
+    Copy-Item -Path $cfg.resolve('file.server_ini') -Destination $ini | Out-Null
+    Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination "$dctmCfgPath\dbpasswd.txt" | Out-Null
+    New-Item -Path $dctmCfgPath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null
     
     # updating the server.ini file
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_password_file', "$dctmCfgPath\dbpasswd.tmp.txt")
@@ -122,7 +145,7 @@ function Test-DocbaseService($name)
     {
         return $false
     }
-    return $true   
+    return $true
 }
 
 
@@ -275,7 +298,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
         UPDATE dm_group_r SET 
             users_names = '$newUserName' 
         WHERE users_names = '$previousUserName)';
-        "       
+        "
     }
     $sql = $sql + 'COMMIT TRAN;'
 
@@ -291,7 +314,7 @@ function Update-Docbrokers($cfg)
     $iniPath = $cfg.resolve('docbase.daemon.ini')
     $docbrokers = $cfg.docbase.docbrokers
     foreach($i in $docbrokers.Keys)
-    {       
+    {
         $section = "DOCBROKER_PROJECTION_TARGET"
         if  ($i -gt 0)
         {
@@ -343,7 +366,7 @@ function Check-Locations($cnx, $cfg)
             if (-not $cfg.location.ContainsKey($loc))
             {
                 throw "No entry in migrate.properties for location $loc)"
-            }                    
+            }
             Log-Verbose "Entry for location $loc found"
         }
     }
@@ -362,7 +385,7 @@ function Check-Locations($cnx, $cfg)
             if ($a.Length -eq 0)
             {
                 throw "Location $loc is not in the list of defined dm_location_s of use by a file store"
-            }                         
+            }
             $fsPath = $cfg.location.($loc) + '\' + $cfg.docbase.hexid
             if (-not (Test-Path($fsPath)))
             {
@@ -472,7 +495,6 @@ function Update-DmLocations($cnx, $cfg)
       
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
     Log-Info "Dm locations successfully fixed"
-
 }
 
 
@@ -580,12 +602,12 @@ function New-MigrationTables($cnx)
     )
 
     CREATE TABLE dbo.mig_locations(
-	    r_object_id nchar(16) NOT NULL,
-	    mount_point_name nvarchar(32) NOT NULL,
-	    path_type nvarchar(16) NOT NULL,
-	    file_system_path nvarchar(255) NOT NULL,
-	    security_type nvarchar(32) NOT NULL,
-	    no_validation smallint NOT NULL
+        r_object_id nchar(16) NOT NULL,
+        mount_point_name nvarchar(32) NOT NULL,
+        path_type nvarchar(16) NOT NULL,
+        file_system_path nvarchar(255) NOT NULL,
+        security_type nvarchar(32) NOT NULL,
+        no_validation smallint NOT NULL
     )
     
     CREATE TABLE dbo.mig_indexes (
@@ -702,9 +724,6 @@ function Save-CustomIndexes($cnx, $cfg)
     $result = Select-Table -cnx $cnx -sql $sql  
     try
     {               
-        [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | out-null
-
-       # Add-Type -AssemblyName 'Microsoft.SqlServer.Smo, Version=9.0.242.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'
         # get the server connection
         $sc = New-Object Microsoft.SqlServer.Management.Common.ServerConnection
         $sc.ConnectionString = "server=$dbserver; uid=$dbuser; password=$dbpwd; database=$dbname;"
@@ -713,7 +732,7 @@ function Save-CustomIndexes($cnx, $cfg)
             # get the server now
             $server = New-Object Microsoft.SqlServer.Management.Smo.Server -ArgumentList $sc
 
-             $sql = 'BEGIN TRAN;'                
+             $sql = 'BEGIN TRAN;'
 
             foreach ($row in $result.Rows)
             {
