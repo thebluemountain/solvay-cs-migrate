@@ -277,6 +277,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
         user_os_domain = '$newUserDomain',
         user_login_name = '$newUserName',
         user_login_domain = '$newUserDomain',
+        acl_domain = '$newUserName',
         user_source = ' ',
         user_privileges = 16,
         user_state = 0 
@@ -633,9 +634,25 @@ function New-MigrationTables($cnx)
 }
 #>
 
+function Test-TableExists ($cnx, $name)
+{
+ $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
+  'WHERE t.name = ''' + $name + ''' AND t.type = ''U'' AND t.schema_id = s.schema_id AND s.name = ''dbo'''
+ $r = Execute-Scalar -cnx $cnx -sql $sql
+ if ($r)
+ {
+  return $true
+ }
+ return $false
+}
+
 function Test-MigrationTables($cnx, $cfg)
 {
-    $catName = $cfg.revolve('docbase.database')
+ $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
+  'WHERE t.name IN (''mig_active_jobs'', ''mig_user'', ''mig_indexes'') AND ' + 
+   't.type = ''U'' AND t.schema_id = s.schema_id AND s.name = ''dbo'''
+<#
+    $catName = $cfg.resolve('docbase.database')
     $sql = "IF (EXISTS (SELECT *
              FROM INFORMATION_SCHEMA.TABLES
              WHERE TABLE_SCHEMA = 'dbo'
@@ -646,9 +663,11 @@ function Test-MigrationTables($cnx, $cfg)
                )
                AND TABLE_CATALOG = '$catName'))
             SELECT 1 AS res ELSE SELECT 0 AS res;"
-
+#>
     $r = Execute-Scalar -cnx $cnx -sql $sql
-    if ($r -eq 1) {
+    if ($r)
+    {
+        # there is at least one table
         return $true
     }
     return $false
@@ -656,23 +675,31 @@ function Test-MigrationTables($cnx, $cfg)
 
 function Remove-MigrationTables($cnx)
 {
-    Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_user' | Out-Null
-    Log-Verbose 'Table dbo.mig_user successfully dropped'
-
-    $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_indexes'
-    if ($n -eq 0)
+    if (Test-TableExists -cnx $cnx -name 'mig_user')
     {
-        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_indexes' | Out-Null
-        Log-Verbose 'Table dbo.mig_indexes successfully dropped'
+        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_user' | Out-Null
+        Log-Verbose 'Table dbo.mig_user successfully dropped'
     }
 
-    $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_active_jobs'
-    if ($n -eq 0)
+    if (Test-TableExists -cnx $cnx -name 'mig_indexes')
     {
-        Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_active_jobs' | Out-Null
-        Log-Verbose 'Table dbo.mig_active_jobs successfully dropped'
+        $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_indexes'
+        if ($n -eq 0)
+        {
+            Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_indexes' | Out-Null
+            Log-Verbose 'Table dbo.mig_indexes successfully dropped'
+        }
     }
 
+    if (Test-TableExists -cnx $cnx -name 'mig_active_jobs')
+    {
+        $n = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_active_jobs'
+        if ($n -eq 0)
+        {
+            Execute-NonQuery -cnx $cnx -sql 'DROP TABLE dbo.mig_active_jobs' | Out-Null
+            Log-Verbose 'Table dbo.mig_active_jobs successfully dropped'
+        }
+    }
     Log-Info "Migration tables deleted"
 }
 
@@ -773,64 +800,80 @@ function Save-CustomIndexes($cnx, $cfg)
 
 function Restore-CustomIndexes($cnx, $cfg)
 {
-    $results = Select-Table -cnx $cnx -sql 'SELECT * from dbo.mig_indexes'
-    try
+    if (Test-TableExists -cnx $cnx -name 'mig_indexes')
     {
-        $indexRestored = 0   
-        foreach($row in $results.Rows)
+        # OK, go for it now !
+        $results = Select-Table -cnx $cnx -sql 'SELECT * from dbo.mig_indexes'
+        $errors = 0
+        try
         {
-            $indexName = $row['index_name']
-            $tableName = $row['table_name']
-            $indexDef = $row['ddl']
-            $sql =  "
-            BEGIN TRAN; 
-            $indexDef
-            DELETE FROM dbo.mig_indexes 
-             WHERE index_name = '$indexName' 
-             AND table_name = '$tableName';
-            COMMIT TRAN"
-            try
+            $indexRestored = 0   
+            foreach($row in $results.Rows)
             {
-                Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-                $indexRestored = $indexRestored + 1
-                Log-Verbose "Successfully restored index $indexName on table $tableName"
+                $indexName = $row['index_name']
+                $tableName = $row['table_name']
+                $indexDef = $row['ddl']
+                $sql =  "
+                BEGIN TRAN; 
+                $indexDef
+                DELETE FROM dbo.mig_indexes 
+                 WHERE index_name = '$indexName' 
+                 AND table_name = '$tableName';
+                COMMIT TRAN"
+                try
+                {
+                    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+                    $indexRestored = $indexRestored + 1
+                    Log-Verbose "Successfully restored index $indexName on table $tableName"
+                }
+                catch
+                {
+                    $errors += 1
+                    Log-Error "Error (Non-blocking) while restoring index $indexName on table $tableName - $($_.Exception.Message)"
+                }
             }
-            catch
+            if (0 -lt $errors)
             {
-                Log-Warning "Error while restoring index $indexName on table $tableName - $($_.Exception.Message)"
+                Log-Info "Successfully restored $indexRestored index(es)"
+            }
+            else
+            {
+                Log-Info "Successfully restored $indexRestored index(es) with $errors errors preventing from re-creation"
             }
         }
-        Log-Info "Successfully restored $indexRestored index(es)"
-    }
-    finally
-    {
-        $results.Dispose()
+        finally
+        {
+            $results.Dispose()
+        }
     }
 }
 
 function Restore-ActiveJobs($cnx)
 {
-    $results = Select-Table -cnx $cnx -sql 'SELECT r_object_id FROM dbo.mig_active_jobs'
-    try
+    if (Test-TableExists -cnx $cnx -name 'mig_active_jobs')
     {
-        foreach ($row in $results)
+        $results = Select-Table -cnx $cnx -sql 'SELECT r_object_id FROM dbo.mig_active_jobs'
+        try
         {
-            $id = $row['r_object_id']
-            $sql = "
-            BEGIN TRAN
-            UPDATE dbo.dm_job_s SET is_inactive = 0 WHERE r_object_id = '$id';
-            DELETE FROM dbo.mig_active_jobs
-             WHERE r_object_id = '$id';
-            COMMIT TRAN;
-            "
-            Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-            Log-Verbose "Restored active job $id"
+            foreach ($row in $results)
+            {
+                $id = $row['r_object_id']
+                $sql = "
+                BEGIN TRAN
+                UPDATE dbo.dm_job_s SET is_inactive = 0 WHERE r_object_id = '$id';
+                DELETE FROM dbo.mig_active_jobs
+                 WHERE r_object_id = '$id';
+                COMMIT TRAN;
+                "
+                Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+                Log-Verbose "Restored active job $id"
+            }
+            Log-Info "Successfully restored $($results.Rows.Count) active job(s)"
         }
-        Log-Info "Successfully restored $($results.Rows.Count) active job(s)"
-    }
-    finally
-    {
-        $results.Dispose()
+        finally
+        {
+            $results.Dispose()
+        }
     }
 }
 

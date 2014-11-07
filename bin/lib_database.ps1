@@ -2,7 +2,7 @@
 
 # The value in second used as time out for ODBC commands
 # Should be big enough to cater for long operation such as index creation
-$ODBC_COMMAND_TIME_OUT = 300
+$ODBC_COMMAND_TIME_OUT = 3600
 
 <#
  the function that returns an opened connection to the database
