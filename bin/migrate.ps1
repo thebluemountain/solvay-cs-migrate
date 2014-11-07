@@ -116,7 +116,7 @@ try
             Update-JobsTargetServer -cnx $cnx -cfg $cfg
 
             # Disable projections
-            Disable-Projections -cnx $cnx -docbaseName $cfg.resolve('docbase.name')
+            Disable-Projections -cnx $cnx -name $cfg.resolve('docbase.config')
 
             # Create the temporay table for custom indexes
             Create-mig_indexesTable -cnx $cnx
@@ -168,7 +168,7 @@ try
             Restore-ActiveJobs -cnx $cnx
 
             # Remove temporary mig tables
-            Remove-MigrationTables -cnx $cnx      
+            Remove-MigrationTables -cnx $cnx
         }
     }
     finally

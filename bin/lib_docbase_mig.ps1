@@ -896,18 +896,30 @@ WHERE
   }
 }
 
-function Disable-Projections ($cnx, $docbaseName)
+function Disable-Projections ($cnx, $name)
 {
-    $sql ="
-       UPDATE dm_server_config_r SET projection_enable = 0
-        WHERE r_object_id IN
-        (SELECT r_object_id FROM dbo.dm_server_config_r
-          WHERE r_object_id IN
-          (SELECT r_object_id FROM dbo.dm_server_config_sv
-            WHERE i_has_folder = 1 AND object_name = '$docbaseName'
-            AND projection_enable <> 0
-            AND projection_enable IS NOT NULL))"
+  $sql ="
+   UPDATE dm_server_config_r 
+   SET projection_enable = 0
+   WHERE 
+   (
+    (r_object_id IN
+     (SELECT r_object_id FROM dbo.dm_server_config_sv
+      WHERE i_has_folder = 1 AND object_name = '$name'
+     )
+    )
+    AND (projection_enable <> 0)
+    AND (projection_enable IS NOT NULL)
+    AND (projection_proxval > 0)
+   )"
 
-     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-     Log-Info "Disabled projections in  server config"
+  $count = Execute-NonQuery -cnx $cnx -sql $sql
+  if (0 -lt $count)
+  {
+    Log-Info "$count projections to docbroker disabled in server config"
+  }
+  else
+  {
+    Log-Info 'there is no docbroker projection to disable in server config'
+  }
 }
