@@ -670,7 +670,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.daemon.logname = '${' + $db + '.name}.log'
  $docbase.daemon.log = 
   '${' + $env + '.DOCUMENTUM}\dba\log\${' + $db + '.daemon.logname}'
- $docbase.daemon.cmd = '"${' + $env + '.DM_HOME}\bin\documentum.exe "' + 
+ $docbase.daemon.cmd = '"${' + $env + '.DM_HOME}\bin\documentum.exe" ' + 
   '-docbase_name "${' + $db + '.name}" ' + 
   '-security acl ' + 
   '-init_file "${' + $db + '.daemon.ini}" ' + 
