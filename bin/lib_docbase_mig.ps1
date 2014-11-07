@@ -87,7 +87,7 @@ function Create-IniFiles($cfg)
     New-Item -Path $inipath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null
     Log-Verbose ('dbpasswd.tmp.txt file successfully created in ' + $inipath)
 
-    Copy-Item -Path "$($cfg.file.config_path)\*.cnt" -Destination $inipath | Out-Null
+    Copy-Item -Path "$($cfg.file.config_folder)\*.cnt" -Destination $inipath | Out-Null
     Log-Verbose ('copied .cnt files into ' + $inipath)
 
     # updating the server.ini file
