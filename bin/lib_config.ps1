@@ -148,7 +148,7 @@ function checkPassword ($user, $domain, $pwd)
  #>
 function readPwd ($domain, $user)
 {
-  $msg = 'enter password for user ' + $domain + '\' + $user + ' (empty to cancels): '
+  $msg = 'enter password for user ' + $domain + '\' + $user + ' (empty to cancels)'
   $msg2 = 'wrong password.\n' + $msg
   $pwd = ''
   while (0 -eq $pwd.length)
@@ -721,7 +721,8 @@ function GetEnvironment ()
  $env = createObj
  foreach ($item in Get-Childitem env:*)
  {
-  $env.($item.key) = $item.value
+  $safeKey = $item.key.Replace('.', '_') 
+  $env.($safeKey) = $item.value
  }
  return $env
 }

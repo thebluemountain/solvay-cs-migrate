@@ -508,7 +508,6 @@ function Update-DmLocations($cnx, $cfg)
     Log-Info "Dm locations successfully fixed"
 }
 
-
 function Update-ServerConfig($cnx, $cfg)
 {
     $sql =
@@ -557,82 +556,6 @@ function Update-AppServerURI($cnx, $cfg)
 
     Log-Info "app_server_uri updated successfully"
 }
-
-<#
- to delete ?
-function New-MigrationTables($cnx)
-{
-    $sql = 
-    'CREATE TABLE dbo.mig_active_jobs (
-        r_object_id nchar(16) NOT NULL
-     )
-
-     CREATE TABLE dbo.mig_user(
-        r_object_id nchar(16) NOT NULL,
-        user_name nvarchar(32) NOT NULL,
-        user_os_name nvarchar(32) NOT NULL,
-        user_address nvarchar(80) NOT NULL,
-        user_group_name nvarchar(32) NOT NULL,
-        user_privileges int NOT NULL,
-        owner_def_permit int NOT NULL,
-        world_def_permit int NOT NULL,
-        group_def_permit int NOT NULL,
-        default_folder nvarchar(200) NOT NULL,
-        r_is_group smallint NOT NULL,
-        user_db_name nvarchar(32) NOT NULL,
-        description nvarchar(255) NOT NULL,
-        acl_domain nvarchar(32) NOT NULL,
-        acl_name nvarchar(32) NOT NULL,
-        user_os_domain nvarchar(16) NOT NULL,
-        home_docbase nvarchar(120) NOT NULL,
-        user_state int NOT NULL,
-        client_capability int NOT NULL,
-        globally_managed smallint NOT NULL,
-        r_modify_date datetime NOT NULL,
-        user_delegation nvarchar(32) NOT NULL,
-        workflow_disabled smallint NOT NULL,
-        alias_set_id nchar(16) NOT NULL,
-        user_source nvarchar(16) NOT NULL,
-        user_ldap_dn nvarchar(255) NOT NULL,
-        user_xprivileges int NOT NULL,
-        r_has_events smallint NOT NULL,
-        failed_auth_attempt int NOT NULL,
-        user_admin nvarchar(32) NOT NULL,
-        user_global_unique_id nvarchar(255) NOT NULL,
-        user_login_name nvarchar(80) NOT NULL,
-        user_login_domain nvarchar(255) NOT NULL,
-        user_initials nvarchar(16) NOT NULL,
-        user_password nvarchar(256) NOT NULL,
-        user_web_page nvarchar(255) NOT NULL,
-        first_failed_auth_utc_time datetime NOT NULL,
-        last_login_utc_time datetime NOT NULL,
-        deactivated_utc_time datetime NOT NULL,
-        deactivated_ip_addr nvarchar(64) NOT NULL,
-        i_is_replica smallint NOT NULL,
-        i_vstamp int NOT NULL
-    )
-
-    CREATE TABLE dbo.mig_locations(
-        r_object_id nchar(16) NOT NULL,
-        mount_point_name nvarchar(32) NOT NULL,
-        path_type nvarchar(16) NOT NULL,
-        file_system_path nvarchar(255) NOT NULL,
-        security_type nvarchar(32) NOT NULL,
-        no_validation smallint NOT NULL
-    )
-
-    CREATE TABLE dbo.mig_indexes (
-        table_name nvarchar(128) NOT NULL,
-        index_name nvarchar(128) NOT NULL,
-        ddl nvarchar(4000) NOT NULL
-    )
-    CREATE UNIQUE NONCLUSTERED INDEX mig_indexes_key 
-    ON dbo.mig_indexes (table_name, index_name)'
-
-    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Log-Info "Migration tables created"
-}
-#>
 
 function Test-TableExists ($cnx, $name)
 {
@@ -971,4 +894,20 @@ WHERE
   {
     $results.Dispose()
   }
+}
+
+function Disable-Projections ($cnx, $docbaseName)
+{
+    $sql ="
+       UPDATE dm_server_config_r SET projection_enable = 0
+        WHERE r_object_id IN
+        (SELECT r_object_id FROM dbo.dm_server_config_r
+          WHERE r_object_id IN
+          (SELECT r_object_id FROM dbo.dm_server_config_sv
+            WHERE i_has_folder = 1 AND object_name = '$docbaseName'
+            AND projection_enable <> 0
+            AND projection_enable IS NOT NULL))"
+
+     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+     Log-Info "Disabled projections in  server config"
 }

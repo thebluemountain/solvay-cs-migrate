@@ -4,6 +4,14 @@ param (
     [string]$configPath
     )
      
+Write-Warning "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+$answer = read-host "The use of this rollback srcipt is unsupported: Do you want to proceed? (y/n)"
+if ('y' -ne $answer.ToLower())
+{
+    return
+}
+  
+
 #check for configuration path validity
 $configPath = Resolve-Path $configPath -ErrorAction Stop
 Write-Output "Configuration path: $configPath"

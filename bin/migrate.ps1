@@ -1,7 +1,9 @@
 ﻿[CmdletBinding()]
 param (
     [Parameter(Mandatory=$True)]
-    [string]$configPath
+    [string]$ConfigPath,
+    [switch]
+    [bool]$PostUpgrade = $false
     )
 
 if ($null -eq $PSScriptRoot)
@@ -13,7 +15,7 @@ try
 {
     # Start transcription of the PS session to a log file.
     $logDate = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $LogFileLocation = "$configPath\migration_log-$logDate.txt"
+    $LogFileLocation = "$ConfigPath\migration_log-$logDate.txt"
     try
     {
         Start-Transcript -path $LogFileLocation -append
@@ -31,23 +33,34 @@ try
 
     # Include database functions
     . "$PSScriptRoot\lib_database.ps1"
-
-    # ------------------- 1- Validate environment --------------------
-
+  
     $startDate = Get-Date  -Verbose
-    Log-Info ("Migration script started on $startDate")
-
+    if (-not $PostUpgrade)
+    {
+        Log-Info "*** Pre-Content Server upgrade migration operations started on $startDate ***"
+    }
+    else
+    {
+        Log-Info "*** Post-Content Server upgrade migration operations started on $startDate ***"
+    }
+     
+    # --------------------------- Validate environment ------------------------------------------
+    
     #check for configuration path validity
-    $configPath = Resolve-Path $configPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
+    $ConfigPath = Resolve-Path $ConfigPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
     if ($pathErr)
     {
         throw $pathErr
     }
-    Log-Info("Configuration path: $configPath")
+    Log-Info("Configuration path: $ConfigPath")
 
     # initialize the environment
-    $cfg = Initialize $configPath
+    $cfg = Initialize $ConfigPath
 
+    # Resolve and log config object content
+    Log-Verbose $cfg.dump()
+    Log-Verbose $cfg.show()
+    
     # current current user's pwd
     $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
     if ($null -eq $pwd)
@@ -64,78 +77,99 @@ try
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
     {
-        # performs sanity checks against data held in database
-        $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
-        if ($migCheck) 
-        {
-            throw "Migration temporary tables already present"
-        }
-        Check-Locations -cnx $cnx -cfg $cfg
+        if (-not $PostUpgrade)
+        {            
+            # --------------------- Performs pre-Content Server ugrade operations -----------------
 
-        # managing the install owner name change
-
-        # is there a change ?
-        $installOwnerChanged = Test-InstallOwnerChanged -cnx $cnx -cfg $cfg
-
-        if ($installOwnerChanged -ne [InstallOwnerChanges]::None)
-        {
-            # if we need to rename ...
-            if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
+            # performs sanity checks against data held in database
+            $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
+            if ($migCheck) 
             {
-                # ensuring current user does not exists
-                Test-UserExists -cnx $cnx -cfg $cfg
+                throw "Migration temporary tables already present"
             }
-            # managing the change of install owner
-            Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged
+            Check-Locations -cnx $cnx -cfg $cfg
+
+            # managing the install owner name change
+
+            # is there a change ?
+            $installOwnerChanged = Test-InstallOwnerChanged -cnx $cnx -cfg $cfg
+
+            if ($installOwnerChanged -ne [InstallOwnerChanges]::None)
+            {
+                # if we need to rename ...
+                if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
+                {
+                    # ensuring current user does not exists
+                    Test-UserExists -cnx $cnx -cfg $cfg
+                }
+                # managing the change of install owner
+                Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged
+            }
+            else
+            {
+                Log-Info("Install owner has not changed")
+            }
+            # Disable all jobs 
+            Disable-Jobs -cnx $cnx -cfg $cfg
+
+            # Change target server on jobs
+            Update-JobsTargetServer -cnx $cnx -cfg $cfg
+
+            # Disable projections
+            Disable-Projections -cnx $cnx -docbaseName $cfg.resolve('docbase.name')
+
+            # Create the temporay table for custom indexes
+            Create-mig_indexesTable -cnx $cnx
+
+            # Save custom indexes definition in temp table and drop indexes
+            Save-CustomIndexes -cnx $cnx -cfg $cfg
+
+            # creating initialization files
+            Create-IniFiles($cfg)
+
+            # configuring registry
+            Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
+
+            # updating service files
+            Update-ServiceFile($cfg)
+
+            # creating service
+            New-DocbaseService $cfg.ToDocbaseService()
+
+            # updating the list of installed docbase
+            Update-DocbaseList($cfg)
+
+            # managing docbroker changes
+            Update-Docbrokers($cfg)
+
+            # managing file store changes
+            Update-Locations -cnx $cnx -cfg $cfg
+
+            # fixing some dm_location
+            Update-DmLocations -cnx $cnx -cfg $cfg
+
+            # Fix mount points
+            Update-MountPoint -cnx $cnx -cfg $cfg
+
+            # Update Server config
+            Update-ServerConfig -cnx $cnx -cfg $cfg
+
+            # Update app_server_uri in server config
+            Update-AppServerURI -cnx $cnx -cfg $cfg
         }
         else
         {
-            Log-Info("Install owner has not changed")
+            # ------------------- Performs post-Content Server ugrade operations ------------------
+                     
+            # Recreate indexes from definition stored in temp table   
+            Restore-CustomIndexes -cnx $cnx
+
+            # Re-activate jobs
+            Restore-ActiveJobs -cnx $cnx
+
+            # Remove temporary mig tables
+            Remove-MigrationTables -cnx $cnx      
         }
-        # Disable all jobs and
-        Disable-Jobs -cnx $cnx -cfg $cfg
-
-        # Change target server on jobs
-        Update-JobsTargetServer -cnx $cnx -cfg $cfg
-
-        # Create the temporay table for custom indexes
-        Create-mig_indexesTable -cnx $cnx
-
-        # Save custom indexes definition in temp table and drop indexes
-        Save-CustomIndexes -cnx $cnx -cfg $cfg
-
-        # creating initialization files
-        Create-IniFiles($cfg)
-
-        # configuring registry
-        Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
-
-        # updating service files
-        Update-ServiceFile($cfg)
-
-        # creating service
-        New-DocbaseService $cfg.ToDocbaseService()
-
-        # updating the list of installed docbase
-        Update-DocbaseList($cfg)
-
-        # managing docbroker changes
-        Update-Docbrokers($cfg)
-
-        # managing file store changes
-        Update-Locations -cnx $cnx -cfg $cfg
-
-        # fixing some dm_location
-        Update-DmLocations -cnx $cnx -cfg $cfg
-
-        # Fix mount points
-        Update-MountPoint -cnx $cnx -cfg $cfg
-
-        # Update Server config
-        Update-ServerConfig -cnx $cnx -cfg $cfg
-
-        # Update app_server_uri in server config
-        Update-AppServerURI -cnx $cnx -cfg $cfg
     }
     finally
     {
@@ -143,7 +177,7 @@ try
         {
             $cnx.Close()
         }
-    }
+    }   
 }
 catch
 {
