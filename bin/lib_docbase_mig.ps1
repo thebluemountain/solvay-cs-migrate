@@ -537,7 +537,7 @@ function Update-AppServerURI($cnx, $cfg)
     }
 
     $sql =
-    "UPDATE dbo.dm_server_config_r SET app_server_uri = 'http://$($cfg.resolve('docbase.jms.host')):$($cfg.resolve('docbase.jms.port'))/DmMethods/servlet/DocMethod'
+    "UPDATE dbo.dm_server_config_r SET app_server_uri = 'http://$($cfg.resolve('docbase.jms.host')):$($cfg.resolve('docbase.jms.port'))/DmMethods/servlet/DoMethod'
     WHERE r_object_id = '$id' AND app_server_name = 'do_method'"
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
     Log-Verbose "app_server_uri successfully updated for 'do_method'"
