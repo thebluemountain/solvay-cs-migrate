@@ -69,8 +69,11 @@ try
     }
     $cfg.user.pwd = $pwd
 
-    # make sure the environment seems OK
-    $cfg = check $cfg
+    if (-not $PostUpgrade)
+    {   
+        # make sure the environment seems OK
+        $cfg = check $cfg
+    }
 
     # Prepare migration temp tables
     # Open ODBC connection
