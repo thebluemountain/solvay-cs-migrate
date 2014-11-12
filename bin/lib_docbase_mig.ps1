@@ -923,3 +923,16 @@ function Disable-Projections ($cnx, $name)
     Log-Info 'there is no docbroker projection to disable in server config'
   }
 }
+
+
+<#
+    Displays the smtp server and email address used by the current docbase
+#>
+function Show-Smtp_parameters($cnx, $cfg)
+{   
+    $address =  Execute-Scalar -cnx $cnx -sql "SELECT user_address FROM dm_user_s WHERE user_name= '$($cfg.resolve('docbase.previous.name'))'"
+    Log-Info "Email address: $address"
+
+    $smtpSrv = Execute-Scalar -cnx $cnx -sql "SELECT smtp_server FROM  dm_server_config_sv WHERE (i_has_folder = 1 AND object_name = '$($cfg.resolve('docbase.config'))')"
+    Log-Info "SMTP Server: $smtpSrv"
+}
