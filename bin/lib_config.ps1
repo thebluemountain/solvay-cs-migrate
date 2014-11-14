@@ -302,6 +302,94 @@ function LoadPropertiesFile ($obj, $filePath)
  }
 }
 
+function SaveFlatPropertiesFile ($obj, $filePath)
+{
+ $stream = [System.IO.StreamWriter] $filepath
+ try
+ {
+  foreach ($key in $obj.Keys)
+  {
+   $value = $obj.($key)
+   $line = $key + '=' + $value
+   $stream.writeline($line)
+  }
+ }
+ finally
+ {
+  $stream.Close()
+ }
+}
+
+function LoadFlatPropertiesFile ($obj, $filePath)
+{
+ $lines = Get-Content $filepath
+ $count = $lines.Length
+ # currentkey and currentvalue goes together
+ $currentkey = $null
+ $currentvalue = $null
+ for ($index = 0; $index -lt $count; $index++)
+ {
+  if ($currentvalue -eq $null)
+  {
+   $line = $lines[$index].TrimEnd()
+   # is this a comment ?
+   if ($line.StartsWith('#'))
+   {
+    # just a comment: forgets about it ...
+    #"comment: " + $line
+   }
+   elseif (0 -lt $line.Length)
+   {
+    # if an empty line ... leaves it
+    # should match ${key}=${value}
+    $pos = $line.IndexOf('=')
+    if (-1 -eq $pos)
+    {
+     throw 'invalid line ' + ($index + 1) + ' encountered: ' + $line
+    }
+    $key = $line.SubString(0, $pos).Trim()
+    $value = $line.SubString($pos+1).Trim()
+    if ($value.EndsWith("\"))
+    {
+     $currentkey = $key
+     $currentvalue = $value.SubString(0,$value.Length - 1)
+    }
+    else
+    {
+     $obj.($key) = $value
+    }
+   }
+  }
+  else
+  {
+   # continuation of a value then
+   if ($line.Length -eq 0)
+   {
+    throw 'empty text encountered at line ' + 
+     ($index + 1) + ' while expecting a continuation'
+   }
+   elseif (! $line.StartsWith(' '))
+   {
+    throw 'line ' + ($index + 1) + 
+     ' is expected to be a continuation line starting with space character: ''' + 
+     $line + ''''
+   }
+   $value = $line.SubString(1)
+   if ($value.EndsWith('\'))
+   {
+    $currentvalue = $currentvalue + $value.SubString(0,$value.Length - 1)
+   }
+   else
+   {
+    $currentvalue = $currentvalue + $value
+    $obj.($currentkey) = $currentvalue
+    $currentkey = $null
+    $currentvalue = $null
+   }
+  }
+ }
+}
+
 <# 
  the function that resolves a value from an object.
  the supplied key is splitted using the . (dot) separator. 
@@ -470,16 +558,15 @@ function _DumpObjAt ($obj, $left)
   return 'null'
  }
  $result = ''
- $type = $obj.GetType().FullName
- if ('System.String' -eq $type)
+ if ($obj -is [System.String])
  {
   $result = '"' + $obj + '"'
  }
- elseif ('System.Collections.Hashtable' -eq $type)
+ elseif ($obj -is [System.Collections.Hashtable])
  {
   $result = _DumpHashTableAt $obj $left
  }
- elseif ('System.Boolean' -eq $type)
+ elseif ($obj -is [System.Boolean])
  {
   if ($true -eq $obj)
   {
@@ -490,7 +577,7 @@ function _DumpObjAt ($obj, $left)
    $result = "false"
   }
  }
- elseif ($obj.GetType().IsArray)
+ elseif ($obj -is [System.Array])
  {
   $result = _DumpArrayAt $obj $left
  }
@@ -663,10 +750,12 @@ function createDocbaseProps ($ini, $env, $db)
 
  # the configuration for daemon
  $docbase.daemon = createObj
+ $docbase.daemon.dir = '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}'
  $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
  $docbase.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
- $docbase.daemon.ini = 
-  '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}\server.ini'
+ $docbase.daemon.ini = '${' + $db + '.daemon.dir}\server.ini'
+ #$docbase.daemon.ini = 
+ # '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}\server.ini'
  $docbase.daemon.logname = '${' + $db + '.name}.log'
  $docbase.daemon.log = 
   '${' + $env + '.DOCUMENTUM}\dba\log\${' + $db + '.daemon.logname}'
@@ -696,6 +785,91 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.previous.jms = createObj
  $docbase.previous.jms.host = '${' + $db + '.previous.host}'
  $docbase.previous.jms.port = 9080
+
+ # regarding the tools: we've got some for docbasic, composer & dars
+ $docbase.tools = createObj
+ $docbase.tools.composer = createObj
+ $docbase.tools.composer.dir = '${' + $env + '.DM_HOME}\install\composer'
+ $docbase.tools.composer.workspace = '${' + $db + '.tools.composer.dir}\workspace'
+ $docbase.tools.composer.headless = '${' + $db + '.tools.composer.dir}\ComposerHeadless'
+ $docbase.tools.docbasic = '${' + $env + '.DM_HOME}\bin\dmbasic.exe'
+ $docbase.tools.darstore = '${' + $env + '.DM_HOME}\install\DARsInternal'
+ $docbase.tools.dfc = '${' + $env + '.DOCUMENTUM}\config\dfc.properties'
+ $docbase.tools.log4j = '${' + $env + '.DOCUMENTUM}\config\log4j.properties'
+
+ # the dars to run
+ $docbase.dars = createObj
+ $docbase.dars.sets = createObj
+ # OK, registers our dars then
+ $docbase.dars.smartcontainer = createObj
+ $docbase.dars.smartcontainer.label = 'Smart Container'
+ $docbase.dars.smartcontainer.file = '${' + $db + '.tools.darstore}\Smart Container.dar'
+
+ $docbase.dars.webtop = createObj
+ $docbase.dars.webtop.label = 'Webtop'
+ $docbase.dars.webtop.file = '${' + $db + '.tools.darstore}\Webtop.dar'
+
+ $docbase.dars.workflow = createObj
+ $docbase.dars.workflow.label = 'Workflow'
+ $docbase.dars.workflow.file = '${' + $db + '.tools.darstore}\Workflow.dar'
+
+ $docbase.dars.presets = createObj
+ $docbase.dars.presets.label = 'Presets'
+ $docbase.dars.presets.file = '${' + $db + '.tools.darstore}\Presets.dar'
+
+ $docbase.dars.webtopexpress = createObj
+ $docbase.dars.webtopexpress.label = 'WebtopExpress'
+ $docbase.dars.webtopexpress.file = '${' + $db + '.tools.darstore}\Webtop Express.dar'
+
+ $docbase.dars.adminaccess = createObj
+ $docbase.dars.adminaccess.label = 'AdminAccess'
+ $docbase.dars.adminaccess.file = '${' + $db + '.tools.darstore}\AdminAccess.dar'
+
+ $docbase.dars.rar = createObj
+ $docbase.dars.rar.label = 'Resource Agents Registry'
+ $docbase.dars.rar.file = '${' + $db + '.tools.darstore}\ResourceAgentsRegistry.dar'
+
+ $docbase.dars.ldap = createObj
+ $docbase.dars.ldap.label = 'LDAP'
+ $docbase.dars.ldap.file = '${' + $db + '.tools.darstore}\LDAP.dar'
+
+ $docbase.dars.dcs = createObj
+ $docbase.dars.dcs.label = 'DCS Attachments'
+ $docbase.dars.dcs.file = '${' + $db + '.tools.darstore}\DCS Attachments.dar'
+
+ $docbase.dars.messaging = createObj
+ $docbase.dars.messaging.label = 'Messaging Application'
+ $docbase.dars.messaging.file = '${' + $db + '.tools.darstore}\MessagingApp.dar'
+
+ $docbase.dars.lc = createObj
+ $docbase.dars.lc.label = 'Java Lifecycle'
+ $docbase.dars.lc.file = '${' + $db + '.tools.darstore}\Lifecycle.dar'
+
+ $docbase.dars.atmos = createObj
+ $docbase.dars.atmos.label = 'ATMOS'
+ $docbase.dars.atmos.file = '${' + $db + '.tools.darstore}\ATMOS Plugin.dar'
+
+ $docbase.dars.esc = createObj
+ $docbase.dars.esc.label = 'Extended Search - Clustering'
+ $docbase.dars.esc.file = '${' + $db + '.tools.darstore}\Extended Search - Clustering.dar'
+
+ $docbase.dars.est = createObj
+ $docbase.dars.est.label = 'Extended Search - SearchTemplates'
+ $docbase.dars.est.file = '${' + $db + '.tools.darstore}\Extended Search - SearchTemplates.dar'
+
+ $docbase.dars.iafilter = createObj
+ $docbase.dars.iafilter.label = 'Index Agent Default Filters'
+ $docbase.dars.iafilter.file = '${' + $db + '.tools.darstore}\IndexAgentDefaultFilters.dar'
+
+ $docbase.dars.qbs = createObj
+ $docbase.dars.qbs.label = 'xPlore Query Base Subscription'
+ $docbase.dars.qbs.file = '${' + $db + '.tools.darstore}\qbs.dar'
+
+ $docbase.dars.dms = createObj
+ $docbase.dars.dms.label = 'DMS Client'
+ $docbase.dars.dms.file = '${' + $db + '.tools.darstore}\DmsClient.dar'
+ # the default (main) list of dars to run
+ $docbase.dars.sets.main='smartcontainer,webtop,workflow,presets,webtopexpress,adminaccess,rar,ldap,dcs,messaging,lc,atmos,esc,est,iafilter,qbs,dms'
 
  $obj = createDynaObj
  $obj.($db) = $docbase

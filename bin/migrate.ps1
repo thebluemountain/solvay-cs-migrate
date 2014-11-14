@@ -69,8 +69,11 @@ try
     }
     $cfg.user.pwd = $pwd
 
-    # make sure the environment seems OK
-    $cfg = check $cfg
+    if (-not $PostUpgrade)
+    {   
+        # make sure the environment seems OK
+        $cfg = check $cfg
+    }
 
     # Prepare migration temp tables
     # Open ODBC connection
@@ -80,6 +83,9 @@ try
         if (-not $PostUpgrade)
         {            
             # --------------------- Performs pre-Content Server ugrade operations -----------------
+
+            # Retrieve the values for the email address and SMTP server used
+            Show-Smtp_parameters -cnx $cnx -cfg $cfg
 
             # performs sanity checks against data held in database
             $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
