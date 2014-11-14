@@ -661,6 +661,9 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
  $docbase.config_folder = '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}'
 
+ $docbase.smtp_server_name = 'none'
+ $docbase.email_address = 'none'
+
  # the configuration for daemon
  $docbase.daemon = createObj
  $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'

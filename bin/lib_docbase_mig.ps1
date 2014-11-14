@@ -924,15 +924,75 @@ function Disable-Projections ($cnx, $name)
   }
 }
 
-
 <#
     Displays the smtp server and email address used by the current docbase
 #>
-function Show-Smtp_parameters($cnx, $cfg)
+function Set-Smtp_parameters($cnx, $cfg)
 {   
-    $address =  Execute-Scalar -cnx $cnx -sql "SELECT user_address FROM dm_user_s WHERE user_name= '$($cfg.resolve('docbase.previous.name'))'"
-    Log-Info "Email address: $address"
+    $cfg.docbase.email_address = Execute-Scalar -cnx $cnx -sql "SELECT user_address FROM dm_user_s WHERE user_name= '$($cfg.resolve('docbase.previous.name'))'"    
+    if ($null -eq $cfg.docbase.email_address)
+    {
+        Log-Warning "Failed to identify email address"
+        $cfg.docbase.email_address = 'unknown@email.address'
+    }
 
-    $smtpSrv = Execute-Scalar -cnx $cnx -sql "SELECT smtp_server FROM  dm_server_config_sv WHERE (i_has_folder = 1 AND object_name = '$($cfg.resolve('docbase.config'))')"
-    Log-Info "SMTP Server: $smtpSrv"
+    Log-Verbose "Email address: $($cfg.docbase.smtp_server_name)"
+    
+    $cfg.docbase.smtp_server_name =  Execute-Scalar -cnx $cnx -sql "SELECT smtp_server FROM  dm_server_config_sv WHERE (i_has_folder = 1 AND object_name = '$($cfg.resolve('docbase.config'))')"
+    if ($null -eq $cfg.docbase.smtp_server_name)
+    {
+        Log-Warning "Failed to identify smtp server name"
+        $cfg.docbase.smtp_server_name = ''
+    }
+    Log-Verbose "SMTP Server: $($cfg.docbase.email_address)"
+}
+
+
+function Start-ContentServerService($Name)
+{
+    $csService = Get-Service $Name -ErrorAction Stop
+    if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
+    {
+        throw "Content server is not stopped."
+    }
+    Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+    Start-Service $csService -ErrorAction Stop
+    Log-Info "Content Server service '$csServiceName' successfully started"
+}
+
+function Start-DmbasicScript($scriptname, $cfg)
+{    
+    $scriptobj = $cfg.dmbasic.scripts.($scriptname)
+    if ($null -eq $scriptobj)
+    {
+        throw "Cannot fing config data for script $scriptname"
+    }
+
+    $outPath = $cfg.resolve('docbase.config_folder') + '\'+ $scriptname + '.out'
+    if (Test-Path($outPath))
+    {
+        throw "Script $scriptname appears to have been run already"
+    }
+
+    $dmbasic = $cfg.resolve('env.dm_home') + '\bin\dmbasic.exe'
+    $dmbasicargs = $cfg.resolve("dmbasic.scripts.$scriptname")
+   
+    Log-Verbose "Dmbasic script args = $dmbasicargs"
+
+    Start-Process -FilePath $dmbasic -ArgumentList $dmbasicargs -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath
+
+    Log-Verbose "Execution of script $scriptname completed"
+}
+
+
+function Start-DmbasicScriptCollection($str)
+{
+    $scriptList = $str.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)
+
+    foreach ($script in $scriptList)
+    {
+        $script = $script.Trim()
+        Log-Info "Executing dmbasic script $script..."
+        Start-DMbasicScript -scriptname $script -cfg $cfg
+    }
 }
