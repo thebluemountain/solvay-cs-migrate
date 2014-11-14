@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param (
     [Parameter(Mandatory=$True)]
     [string]$ConfigPath,
@@ -85,7 +85,7 @@ try
             # --------------------- Performs pre-Content Server ugrade operations -----------------
 
             # Retrieve the values for the email address and SMTP server used
-            Show-Smtp_parameters -cnx $cnx -cfg $cfg
+            set-Smtp_parameters -cnx $cnx -cfg $cfg
 
             # performs sanity checks against data held in database
             $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
@@ -162,6 +162,20 @@ try
 
             # Update app_server_uri in server config
             Update-AppServerURI -cnx $cnx -cfg $cfg
+
+            # ------------------- Start Content Server service ------------------------------------
+            Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
+
+            # ------------------- Perform CS upgrade to version 7.1 -------------------------------
+            
+            # Execute dmbasic script prior to installing DARs
+            Start-DmbasicScriptCollection($cfg.resolve('dmbasic.run_before_dar_install'))
+
+            # Install DARs
+            # TODO
+
+            # Execute dmbasic script after installing DARs
+            Start-DmbasicScriptCollection($cfg.resolve('dmbasic.run_after_dar_install'))
         }
         else
         {
