@@ -33,7 +33,7 @@ function Select-Table ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
         $table = new-object System.Data.DataTable
         $da.Fill($table) | out-null
         # be carefull: it's considered as a collection ...
-        # therefore returned as an array is not empty
+        # therefore returned as an array if not empty
         return ,$table
     }
     finally
@@ -60,7 +60,8 @@ function Execute-NonQuery ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 
 
 <# 
-    Executes an SQL statement against the Connection and returns ...
+    Executes an SQL statement against the Connection and 
+    returns the 1st column of the 1st row
 #>
 function Execute-Scalar ($cnx, $sql)
 {  

@@ -746,10 +746,12 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.rdbms = 'SQLServer'
  $docbase.service = '${' + $ini + '.SERVER_STARTUP.service}'
  $docbase.user = '${' + $ini + '.SERVER_STARTUP.database_owner}'
- $docbase.config_folder = '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}'
 
- $docbase.smtp_server_name = 'none'
- $docbase.email_address = 'none'
+ $docbase.datahome = ''
+ $docbase.smtp = 'localhost'
+ $docbase.email = ''
+ $docbase.connect_mode = 'native'
+ $docbase.locale = 'native'
 
  # the configuration for daemon
  $docbase.daemon = createObj
@@ -791,88 +793,129 @@ function createDocbaseProps ($ini, $env, $db)
 
  # regarding the tools: we've got some for docbasic, composer & dars
  $docbase.tools = createObj
+ $docbase.tools.install = '${' + $env + '.DM_HOME}\install'
+ $docbase.tools.bin = '${' + $env + '.DM_HOME}\bin'
+ $docbase.tools.dba = '${' + $env + '.DOCUMENTUM}\dba'
+ $docbase.tools.config = '${' + $env + '.DOCUMENTUM}\config'
+ $docbase.tools.share = '${' + $env + '.DOCUMENTUM}\share'
+ $docbase.tools.fulltext = '${' + $env + '.DOCUMENTUM}\fulltext'
+ $docbase.tools.dmbasic = '${' + $env + '.DM_HOME}\bin\dmbasic.exe'
+ $docbase.tools.dmscripts = '${' + $db + '.tools.install}\admin'
+ $docbase.tools.tools = '${' + $db + '.tools.install}\tools'
+ $docbase.tools.darstore = '${' + $db + '.tools.install}\DARsInternal'
+ $docbase.tools.dfc = '${' + $db + '.tools.config}\dfc.properties'
+ $docbase.tools.log4j = '${' + $db + '.tools.config}\config\log4j.properties'
  $docbase.tools.composer = createObj
- $docbase.tools.composer.dir = '${' + $env + '.DM_HOME}\install\composer'
+ $docbase.tools.composer.dir = '${' + $db + '.tools.install}\composer'
  $docbase.tools.composer.workspace = '${' + $db + '.tools.composer.dir}\workspace'
  $docbase.tools.composer.headless = '${' + $db + '.tools.composer.dir}\ComposerHeadless'
- $docbase.tools.docbasic = '${' + $env + '.DM_HOME}\bin\dmbasic.exe'
- $docbase.tools.darstore = '${' + $env + '.DM_HOME}\install\DARsInternal'
- $docbase.tools.dfc = '${' + $env + '.DOCUMENTUM}\config\dfc.properties'
- $docbase.tools.log4j = '${' + $env + '.DOCUMENTUM}\config\log4j.properties'
+
+ # the configuration for the upgrade
+ $docbase.upgrade = createObj
+
+ # the docbasic scripts
+ $docbase.upgrade.dmbasic = createObj
+ $docbase.upgrade.dmbasic.steps = createObj
+ # TODO: the invocation of the toolset.ebs normally generates the the file 'applyadmin.out'
+ $docbase.upgrade.dmbasic.steps.before = 'headstart,dm_apply_formats,dm_cas_install,csec_plugin,dm_routerConv_install,templates,replicate_bootstrap,desktop_client,disable_fulltext_jobs,dfc,dfc_javadbexpr,dm_bpmmodules_install,createMethodServerObject,csec_plugin_upgrade_53,toolset,dm_bpm_install,dm_wfTimer_upgrade,create_fulltext_objects,dm_ldap_install,dm_storageservices_install,dm_emailTemplate_install'
+ $docbase.upgrade.dmbasic.steps.after = ''
+
+ $docbase.upgrade.dmbasic.scripts = createObj
+ $docbase.upgrade.dmbasic.scripts.headstart = '-f "${docbase.tools.dmscripts}\headstart.ebs" "${docbase.tools.dmscripts}\headstart2.ebs" -P "${docbase.name}.${docbase.config}" "${env.USERNAME}" "" "" "${env.DM_HOME}" "${docbase.datahome}" "${docbase.tools.dba}" "${docbase.tools.install}" "${docbase.tools.share}" "${docbase.tools.fulltext}\dsearch" "${env.COMPUTERNAME}" "Windows" "en" "${docbase.smtp}" "${docbase.email}" "${env.USERNAME}" "${docbase.connect_mode}" "${docbase.jms.port}" "" "TRUE" dsearch -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_apply_formats = '-f "${docbase.tools.bin}\dm_apply_formats.ebs" -P "noreport" "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${docbase.tools.tools}\formats.csv" trace -e testmain'
+ $docbase.upgrade.dmbasic.scripts.dm_cas_install = '-f "${docbase.tools.dmscripts}\dm_cas_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows"'
+ $docbase.upgrade.dmbasic.scripts.csec_plugin  = '-f "${docbase.tools.dmscripts}\csec_pluging.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows"'
+ $docbase.upgrade.dmbasic.scripts.dm_routerConv_install = '-f "${docbase.tools.dmscripts}\dm_routerConv_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "NONE" -e Install'
+ $docbase.upgrade.dmbasic.scripts.templates = '-f "${docbase.tools.dmscripts}\templates.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "${docbase.tools.install}" -e Install'
+ $docbase.upgrade.dmbasic.scripts.replicate_bootstrap = '-f "${docbase.tools.bin}\dm_apply_formats.ebs" -P "${docbase.name}.${docbase.config}" "${docbase.tools.bin}" "FALSE" -e rmain'
+ $docbase.upgrade.dmbasic.scripts.desktop_client = '-f "${docbase.tools.install}\desktop_client\desktop_client.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}"'
+ $docbase.upgrade.dmbasic.scripts.disable_fulltext_jobs = '-f "${docbase.tools.dmscripts}\disable_fulltext_jobs.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dfc = '-f "${docbase.tools.dmscripts}\dfc.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dfc_javadbexpr = '-f "${docbase.tools.dmscripts}\dfc_javadbexpr.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.dm_bpmmodules_install = '-f "${docbase.tools.dmscripts}\dm_bpmodules_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}\lib" -e Install'
+ $docbase.upgrade.dmbasic.scripts.createMethodServerObject = '-f "${docbase.tools.dmscripts}\createMethodServerObject.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.csec_plugin_upgrade_53  = '-f "${docbase.tools.dmscripts}\csec_plugin_upgrade_53.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" -e Install'
+ $docbase.upgrade.dmbasic.scripts.toolset = '-f "${docbase.tools.dmscripts}\toolset.ebs" -P "${docbase.name}.${docbase.config}" "{docbase.tools.dmscripts}" "${docbase.config}" -e ToolSet'
+ $docbase.upgrade.dmbasic.scripts.dm_bpm_install = '-f "${docbase.tools.dmscripts}\dm_bpm_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_wfTimer_upgrade = '-f "${docbase.tools.dmscripts}\dm_wfTimer_upgrade.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.create_fulltext_objects = '-f "${docbase.tools.dmscripts}\create_fulltext_objects.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "dsearch" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_ldap_install = '-f "${docbase.tools.dmscripts}\dm_ldap_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_storageservices_install = '-f "${docbase.tools.dmscripts}\dm_storageservices_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" "F" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install = '-f "${docbase.tools.dmscripts}\dm_emailTemplate_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
 
  # the dars to run
- $docbase.dars = createObj
- $docbase.dars.sets = createObj
+ $docbase.upgrade.dars = createObj
  # OK, registers our dars then
- $docbase.dars.smartcontainer = createObj
- $docbase.dars.smartcontainer.label = 'Smart Container'
- $docbase.dars.smartcontainer.file = '${' + $db + '.tools.darstore}\Smart Container.dar'
+ $docbase.upgrade.dars.smartcontainer = createObj
+ $docbase.upgrade.dars.smartcontainer.label = 'Smart Container'
+ $docbase.upgrade.dars.smartcontainer.file = '${' + $db + '.tools.darstore}\Smart Container.dar'
 
- $docbase.dars.webtop = createObj
- $docbase.dars.webtop.label = 'Webtop'
- $docbase.dars.webtop.file = '${' + $db + '.tools.darstore}\Webtop.dar'
+ $docbase.upgrade.dars.webtop = createObj
+ $docbase.upgrade.dars.webtop.label = 'Webtop'
+ $docbase.upgrade.dars.webtop.file = '${' + $db + '.tools.darstore}\Webtop.dar'
 
- $docbase.dars.workflow = createObj
- $docbase.dars.workflow.label = 'Workflow'
- $docbase.dars.workflow.file = '${' + $db + '.tools.darstore}\Workflow.dar'
+ $docbase.upgrade.dars.workflow = createObj
+ $docbase.upgrade.dars.workflow.label = 'Workflow'
+ $docbase.upgrade.dars.workflow.file = '${' + $db + '.tools.darstore}\Workflow.dar'
 
- $docbase.dars.presets = createObj
- $docbase.dars.presets.label = 'Presets'
- $docbase.dars.presets.file = '${' + $db + '.tools.darstore}\Presets.dar'
+ $docbase.upgrade.dars.presets = createObj
+ $docbase.upgrade.dars.presets.label = 'Presets'
+ $docbase.upgrade.dars.presets.file = '${' + $db + '.tools.darstore}\Presets.dar'
 
- $docbase.dars.webtopexpress = createObj
- $docbase.dars.webtopexpress.label = 'WebtopExpress'
- $docbase.dars.webtopexpress.file = '${' + $db + '.tools.darstore}\Webtop Express.dar'
+ $docbase.upgrade.dars.webtopexpress = createObj
+ $docbase.upgrade.dars.webtopexpress.label = 'WebtopExpress'
+ $docbase.upgrade.dars.webtopexpress.file = '${' + $db + '.tools.darstore}\Webtop Express.dar'
 
- $docbase.dars.adminaccess = createObj
- $docbase.dars.adminaccess.label = 'AdminAccess'
- $docbase.dars.adminaccess.file = '${' + $db + '.tools.darstore}\AdminAccess.dar'
+ $docbase.upgrade.dars.adminaccess = createObj
+ $docbase.upgrade.dars.adminaccess.label = 'AdminAccess'
+ $docbase.upgrade.dars.adminaccess.file = '${' + $db + '.tools.darstore}\AdminAccess.dar'
 
- $docbase.dars.rar = createObj
- $docbase.dars.rar.label = 'Resource Agents Registry'
- $docbase.dars.rar.file = '${' + $db + '.tools.darstore}\ResourceAgentsRegistry.dar'
+ $docbase.upgrade.dars.rar = createObj
+ $docbase.upgrade.dars.rar.label = 'Resource Agents Registry'
+ $docbase.upgrade.dars.rar.file = '${' + $db + '.tools.darstore}\ResourceAgentsRegistry.dar'
 
- $docbase.dars.ldap = createObj
- $docbase.dars.ldap.label = 'LDAP'
- $docbase.dars.ldap.file = '${' + $db + '.tools.darstore}\LDAP.dar'
+ $docbase.upgrade.dars.ldap = createObj
+ $docbase.upgrade.dars.ldap.label = 'LDAP'
+ $docbase.upgrade.dars.ldap.file = '${' + $db + '.tools.darstore}\LDAP.dar'
 
- $docbase.dars.dcs = createObj
- $docbase.dars.dcs.label = 'DCS Attachments'
- $docbase.dars.dcs.file = '${' + $db + '.tools.darstore}\DCS Attachments.dar'
+ $docbase.upgrade.dars.dcs = createObj
+ $docbase.upgrade.dars.dcs.label = 'DCS Attachments'
+ $docbase.upgrade.dars.dcs.file = '${' + $db + '.tools.darstore}\DCS Attachments.dar'
 
- $docbase.dars.messaging = createObj
- $docbase.dars.messaging.label = 'Messaging Application'
- $docbase.dars.messaging.file = '${' + $db + '.tools.darstore}\MessagingApp.dar'
+ $docbase.upgrade.dars.messaging = createObj
+ $docbase.upgrade.dars.messaging.label = 'Messaging Application'
+ $docbase.upgrade.dars.messaging.file = '${' + $db + '.tools.darstore}\MessagingApp.dar'
 
- $docbase.dars.lc = createObj
- $docbase.dars.lc.label = 'Java Lifecycle'
- $docbase.dars.lc.file = '${' + $db + '.tools.darstore}\Lifecycle.dar'
+ $docbase.upgrade.dars.lc = createObj
+ $docbase.upgrade.dars.lc.label = 'Java Lifecycle'
+ $docbase.upgrade.dars.lc.file = '${' + $db + '.tools.darstore}\Lifecycle.dar'
 
- $docbase.dars.atmos = createObj
- $docbase.dars.atmos.label = 'ATMOS'
- $docbase.dars.atmos.file = '${' + $db + '.tools.darstore}\ATMOS Plugin.dar'
+ $docbase.upgrade.dars.atmos = createObj
+ $docbase.upgrade.dars.atmos.label = 'ATMOS'
+ $docbase.upgrade.dars.atmos.file = '${' + $db + '.tools.darstore}\ATMOS Plugin.dar'
 
- $docbase.dars.esc = createObj
- $docbase.dars.esc.label = 'Extended Search - Clustering'
- $docbase.dars.esc.file = '${' + $db + '.tools.darstore}\Extended Search - Clustering.dar'
+ $docbase.upgrade.dars.esc = createObj
+ $docbase.upgrade.dars.esc.label = 'Extended Search - Clustering'
+ $docbase.upgrade.dars.esc.file = '${' + $db + '.tools.darstore}\Extended Search - Clustering.dar'
 
- $docbase.dars.est = createObj
- $docbase.dars.est.label = 'Extended Search - SearchTemplates'
- $docbase.dars.est.file = '${' + $db + '.tools.darstore}\Extended Search - SearchTemplates.dar'
+ $docbase.upgrade.dars.est = createObj
+ $docbase.upgrade.dars.est.label = 'Extended Search - SearchTemplates'
+ $docbase.upgrade.dars.est.file = '${' + $db + '.tools.darstore}\Extended Search - SearchTemplates.dar'
 
- $docbase.dars.iafilter = createObj
- $docbase.dars.iafilter.label = 'Index Agent Default Filters'
- $docbase.dars.iafilter.file = '${' + $db + '.tools.darstore}\IndexAgentDefaultFilters.dar'
+ $docbase.upgrade.dars.iafilter = createObj
+ $docbase.upgrade.dars.iafilter.label = 'Index Agent Default Filters'
+ $docbase.upgrade.dars.iafilter.file = '${' + $db + '.tools.darstore}\IndexAgentDefaultFilters.dar'
 
- $docbase.dars.qbs = createObj
- $docbase.dars.qbs.label = 'xPlore Query Base Subscription'
- $docbase.dars.qbs.file = '${' + $db + '.tools.darstore}\qbs.dar'
+ $docbase.upgrade.dars.qbs = createObj
+ $docbase.upgrade.dars.qbs.label = 'xPlore Query Base Subscription'
+ $docbase.upgrade.dars.qbs.file = '${' + $db + '.tools.darstore}\qbs.dar'
 
- $docbase.dars.dms = createObj
- $docbase.dars.dms.label = 'DMS Client'
- $docbase.dars.dms.file = '${' + $db + '.tools.darstore}\DmsClient.dar'
+ $docbase.upgrade.dars.dms = createObj
+ $docbase.upgrade.dars.dms.label = 'DMS Client'
+ $docbase.upgrade.dars.dms.file = '${' + $db + '.tools.darstore}\DmsClient.dar'
  # the default (main) list of dars to run
- $docbase.dars.sets.main='smartcontainer,webtop,workflow,presets,webtopexpress,adminaccess,rar,ldap,dcs,messaging,lc,atmos,esc,est,iafilter,qbs,dms'
+ $docbase.upgrade.dars.sets = createObj
+ $docbase.upgrade.dars.sets.main='smartcontainer,webtop,workflow,presets,webtopexpress,adminaccess,rar,ldap,dcs,messaging,lc,atmos,esc,est,iafilter,qbs,dms'
 
  $obj = createDynaObj
  $obj.($db) = $docbase
@@ -951,7 +994,7 @@ function Initialize ($path)
 <#
  the method that ensures the environment is OK for further processing
  #>
-function checkObj ($obj)
+function checkObj ($obj, $action)
 {
  # should have a docbase id
  $val = $obj.resolve('docbase.id')
@@ -1034,52 +1077,88 @@ function checkObj ($obj)
   throw 'leading or trailing spaces in value for docbase.previous.host: ''' + $val + ''''
  }
  # make sure we have location (re)definition
- if (-not $cfg.ContainsKey('location')) {
+ if (-not $obj.ContainsKey('location')) {
   throw 'No entries for file store mapping defined in migrate.properties'
  }
-
  # ... TODO: make other tests: the more we make here, 
  # the faster user will know about mistakes
  return $obj
 }
 
-function checkEnv ($obj)
+<#
+ # the method ensure there is no trace of the server on the environment for 
+ # an 'install' action or that there is a server already configured when 
+ # attempting to upgrade it
+ #>
+function checkEnv ($obj, $action)
 {
+ if (($action -ne 'install') -and ($action -ne 'upgrade'))
+ {
+  # don't go any further
+  return $obj
+ }
+
  # make sure there is no directory ${cfg.env.documentum}\dba\config\${cfg.docbase.name}
  $val = $obj.resolve('env.DOCUMENTUM') + '\dba\config\' + $obj.resolve('docbase.name')
- if (test-path $val)
+ $exists = test-path $val
+ if ($exists)
  {
-  throw 'configuration directory ''' + $val + ''' for docbase ''' + 
-   $obj.resolve('docbase.name') + ''' already exists'
+  if ($action -eq 'install')
+  {
+   throw 'configuration directory ''' + $val + ''' for docbase ''' + 
+    $obj.resolve('docbase.name') + ''' already exists'
+  }
+ }
+ else
+ {
+  if ($action -eq 'upgrade')
+  {
+   throw 'there is no configuration directory ' + $val
+  }
  }
  Write-Host 'target config directory existence checked...'
 
  # make sure there is no registry entry 
  # HKEY_LOCAL_MACHINE\SOFTWARE\Documentum\DOCBASES\${cfg.docbase.name} 
- $val = 'HKLM:\Software\Documentum\DOCBASES'
- #if (!(test-path $val))
- #{
- # throw 'registry key ''' + $val + ''' for documentum docbases does not exist'
- #}
- $val += '\' + $obj.resolve('docbase.name')
- if (test-path $val)
+ $val = 'HKLM:\Software\Documentum\DOCBASES' + '\' + $obj.resolve('docbase.name')
+ $exists = test-path $val
+ if ($exists)
  {
-  throw 'registry key ''' + $val + ''' for docbase ''' + 
-   $obj.resolve('docbase.name') + ''' already exists'
+  if ($action -eq 'install')
+  {
+   throw 'registry key ''' + $val + ''' for docbase ''' + 
+    $obj.resolve('docbase.name') + ''' already exists'
+  }
+ }
+ else
+ {
+  if ($action -eq 'upgrade')
+  {
+   throw 'registry key ''' + $val + ''' for docbase ''' + 
+    $obj.resolve('docbase.name') + ''' is not found'
+  }
  }
  Write-Host 'target config registry existence checked...'
+
  # make sure there is no line starting with ${cfg.docbase.service} in cfg.file.services
  # ... and make sure there is no line starting with ${cfg.docbase.service}_s in cfg.file.services
  # the first case is enough
- $pattern = '^' + $obj.resolve('docbase.service')
+ $pattern = '^' + $obj.resolve('docbase.service') + '(_s)?.*$'
  $val = select-string -pattern ($pattern) -path ($obj.resolve('file.services'))
- if (0 -lt $val.length)
+ $count = $val.length
+ if (($action -eq 'install') -and (0 -ne $count))
  {
   throw 'service ' + $obj.resolve('docbase.service') + 
    ' already exists in file ' + $obj.resolve('file.services') + 
    ' (at line ' + $val[0].linenumber + ')'
  }
+ elseif (($action -eq 'upgrade') -and (2 -ne $count))
+ {
+  throw '2 services ' + $obj.resolve('docbase.service') + 
+   ' are not recorded in file ' + $obj.resolve('file.services')
+ }
  Write-Host 'services entry checked...'
+
  # make sure there is an DSN named ${cfg.docbase.dsn}
  $val = 'HKLM:\Software\ODBC\ODBC.INI\' + $obj.resolve('docbase.dsn')
  if (!(test-path $val))
@@ -1091,9 +1170,13 @@ function checkEnv ($obj)
  # make sure there is no service named ${cfg.docbase.daemon.name}
  $val = 'Name=''' + $obj.resolve('docbase.daemon.name') + ''''
  $val = Get-WmiObject -Class Win32_Service -Filter ('Name=''' + $obj.resolve('docbase.daemon.name') + '''')
- if ($val)
+ if (($action -eq 'install') -and ($val))
  {
   throw 'a service named ' + $obj.resolve('docbase.daemon.name') + ' already exists'
+ }
+ elseif (($action -eq 'upgrade') -and ($null -eq $val))
+ {
+  throw 'there is no service named ' + $obj.resolve('docbase.daemon.name')
  }
  Write-Host 'windows service existence checked...'
  # make sure we have a docbase.dsn, docbase.user and docbase.pwd
@@ -1109,7 +1192,7 @@ function checkEnv ($obj)
  {
   throw 'missing docbase.pwd property'
  }
- # this is currently commented as i don't have the docbroker yet
+
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
  $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','ping')
  Log-Verbose $params
@@ -1128,19 +1211,30 @@ function checkEnv ($obj)
   Log-Verbose $params
   $res = & 'dmqdocbroker'  $params 2>&1
   $val = $res | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:' -quiet
-  if (!$val)
+  if (($action -eq 'install') -and (!$val))
   {
    throw 'there is already a docbase ' + 
-   $obj.resolve('docbase.name') + 
-   '. registered on the docbroker'
+    $obj.resolve('docbase.name') + 
+    '. registered on the docbroker'
+  }
+  elseif (($action -eq 'upgrade') -and $val)
+  {
+   throw 'there is already no docbase ' + 
+    $obj.resolve('docbase.name') + 
+    '. registered on the docbroker'
   }
  }
  Write-Host 'docbroker access checked...'
  return $obj
 }
 
-function checkDB ($obj)
+function checkDB ($obj, $action)
 {
+ if (($action -ne 'install') -and ($action -ne 'upgrade'))
+ {
+  # don't go any further
+  return $obj
+ }
  $cnx = New-Connection $obj.ToDbConnectionString()
  try
  {
@@ -1178,10 +1272,6 @@ function checkDB ($obj)
    }
    Write-Host 'docbase config checked...'
   }
-  # saves the hexid: 8 digits representation
-  [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
-  $hex = $val.ToString('x8')
-  $obj.docbase.hexid = $hex
  }
  finally
  {
@@ -1190,16 +1280,21 @@ function checkDB ($obj)
  return $obj;
 }
 
-function check ($obj)
+<#
+ # the method that checks the supplied object holding the configuration 
+ # is compliant with the action to perform
+ #>
+function check ($obj, $action)
 {
  # checks at the meta-data
- $obj = checkObj $obj
+ $obj = checkObj $obj $action
  # check at the environment
- $obj = checkEnv $obj
+ $obj = checkEnv $obj $action
  # check against db
- $obj = checkDB $obj
+ $obj = checkDB $obj $action
  return $obj
 }
+
 <#
  the method that takes and object to build a registry for the 
  #>

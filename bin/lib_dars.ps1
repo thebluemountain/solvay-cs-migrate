@@ -13,10 +13,10 @@ function BuildDars ($conf, $name)
    $dars = [System.Collections.ArrayList]@()
    # dar names are located in: conf.resolve('docbase.dars.sets.' + $this.name)
    # as a comma-separated collection of dar name
-   $all = $this.conf.resolve('docbase.dars.sets.' + $this.name)
+   $all = $this.conf.resolve('docbase.upgrade.dars.sets.' + $this.name)
    foreach ($name in $all.Split(','))
    {
-    $dar = $this.conf.resolve('docbase.dars.' + $name)
+    $dar = $this.conf.resolve('docbase.upgrade.dars.' + $name)
     $dar.name = $name
     if ($null -eq $dar)
     {
@@ -45,7 +45,7 @@ function BuildDars ($conf, $name)
      {
       $files += ','
      }
-     $file = $this.conf.resolve('docbase.dars.' + $dar.name + '.file')
+     $file = $this.conf.resolve('docbase.upgrade.dars.' + $dar.name + '.file')
      $files += $file
     }
 
@@ -89,7 +89,7 @@ function BuildDars ($conf, $name)
     $params.Add($this.conf.resolve('docbase.tools.composer.dir') + '\deploy.xml') | Out-Null
     $params.Add('deployAll') | Out-Null
     Log-Verbose ('about to run dar installation for ' + $this.name)
-    Log-Verbose $program
+    Log-Verbose $program
     Log-Verbose $params
     $res = & $program $params 2>&1
 
@@ -111,6 +111,8 @@ function BuildDars ($conf, $name)
  return $obj
 }
 
+<#
+ # sample program accessing the config to run dar installation
 cls
 if ($null -eq $PSScriptRoot)
 {
@@ -126,4 +128,4 @@ $conf.docbase.dars.sets.main='smartcontainer,webtop'
 $darsbuilder = BuildDars $conf 'main'
 $darsbuilder.Install()
 write 'done'
-
+#>

@@ -1,14 +1,170 @@
 [CmdletBinding()]
 param (
     [Parameter(Mandatory=$True)]
-    [string]$ConfigPath,
-    [switch]
-    [bool]$PostUpgrade = $false
+    [string]$ConfigPath
+    , [Parameter(Mandatory=$True)]
+    [string]$action
     )
 
 if ($null -eq $PSScriptRoot)
 {
     $PSScriptRoot = (Split-Path $MyInvocation.MyCommand.Path -Parent)
+}
+
+<#
+ the function that installs a new server instance
+#>
+function installServer ($cnx, $cfg)
+{
+    # --------------------- Performs pre-Content Server ugrade operations -----------------
+    # performs sanity checks against data held in database
+    $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
+    if ($migCheck) 
+    {
+        throw 'Migration temporary tables already present'
+    }
+    Check-Locations -cnx $cnx -cfg $cfg
+
+    # managing the install owner name change
+
+    # is there a change ?
+    $installOwnerChanged = Test-InstallOwnerChanged -cnx $cnx -cfg $cfg
+
+    if ($installOwnerChanged -ne [InstallOwnerChanges]::None)
+    {
+        # if we need to rename ...
+        if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
+        {
+            # ensuring current user does not exists
+            Test-UserExists -cnx $cnx -cfg $cfg
+        }
+        # managing the change of install owner
+        Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged
+    }
+    else
+    {
+        Log-Info('Install owner has not changed')
+    }
+    # Disable all jobs 
+    Disable-Jobs -cnx $cnx -cfg $cfg
+
+    # Change target server on jobs
+    Update-JobsTargetServer -cnx $cnx -cfg $cfg
+
+    # Disable projections
+    Disable-Projections -cnx $cnx -name $cfg.resolve('docbase.config')
+
+    # Create the temporay table for custom indexes
+    Create-mig_indexesTable -cnx $cnx
+
+    # Save custom indexes definition in temp table and drop indexes
+    Save-CustomIndexes -cnx $cnx -cfg $cfg
+
+    # creating initialization files
+    Create-IniFiles($cfg)
+
+    # configuring registry
+    Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
+
+    # updating service files
+    Update-ServiceFile($cfg)
+
+    # creating service
+    New-DocbaseService $cfg.ToDocbaseService()
+
+    # updating the list of installed docbase
+    Update-DocbaseList($cfg)
+
+    # managing docbroker changes
+    Update-Docbrokers($cfg)
+
+    # managing file store changes
+    Update-Locations -cnx $cnx -cfg $cfg
+
+    # fixing some dm_location
+    Update-DmLocations -cnx $cnx -cfg $cfg
+
+    # Fix mount points
+    Update-MountPoint -cnx $cnx -cfg $cfg
+
+    # Update Server config
+    Update-ServerConfig -cnx $cnx -cfg $cfg
+
+    # Update app_server_uri in server config
+    Update-AppServerURI -cnx $cnx -cfg $cfg
+
+    # ------------------- Start Content Server service ------------------------------------
+    Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
+}
+
+function upgradeServer ($cfg)
+{
+    # make sure the service is started for the server
+    Start-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name')
+
+    # ------------------- Perform CS upgrade to version 7.1 -------------------------------
+    # Execute dmbasic script prior to installing DARs
+    Start-DmbasicStep -cfg $cfg -step 'before'
+
+    # Install DARs listed in 'main' set
+    $darbuilder = BuildDars $cfg 'main'
+    $darsbuilder.Install()
+
+    # Execute dmbasic script after installing DARs
+    Start-DmbasicStep -cfg $cfg -step 'after'
+}
+
+function restoreServer ($cnx)
+{
+    # Recreate indexes from definition stored in temp table
+    Restore-CustomIndexes -cnx $cnx
+
+    # Re-activate jobs
+    Restore-ActiveJobs -cnx $cnx
+
+    # Remove temporary mig tables
+    Remove-MigrationTables -cnx $cnx
+}
+
+function uninstallServer ($cfg)
+{
+    $docbasename = $cfg.resolve('docbase.name')
+    # stopping the content server ...
+    Stop-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name') | Out-Null
+
+    # remove entries from services file ?
+    $services = $cfg.resolve('file.services')
+    if (test-path $services)
+    {
+        # '^myservice2(_s)?.*$'
+        $exp = '^' + $cfg.resolve('docbase.service') + '(_s)?.*$'
+        if (0 -lt ((type $services) -match $exp).length)
+        {
+            (type $services) -notmatch $exp | out-file $services
+            log-info "removed services entries for server $docbase.name"
+        }
+    }
+
+    # remove reference to the docbase in the documentum.txt
+    $txtfile = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.txt'
+    log-info "you should remove docbase section $docbasename' in txtfile"
+
+    # remove registry entry
+    $reg = 'HKLM:\Software\Documentum\DOCBASES' + '\' + $docbasename
+    if (test-path $reg)
+    {
+        remove-item $reg -recurse  | Out-Null
+        log-info "removed registry entry $reg"
+    }
+
+    # remove directory containing the config
+    $init = $cfg.resolve('docbase.daemon.dir')
+    if (test-path $init)
+    {
+        remove-item $init -recurse  | Out-Null
+        log-info "removed directory $init"
+    }
+    log-info "done uninstalling server $docbasename"
 }
 
 try
@@ -33,19 +189,15 @@ try
 
     # Include database functions
     . "$PSScriptRoot\lib_database.ps1"
-  
+
+    # Include dars functions
+    . "$PSScriptRoot\lib_dars.ps1"
+
     $startDate = Get-Date  -Verbose
-    if (-not $PostUpgrade)
-    {
-        Log-Info "*** Pre-Content Server upgrade migration operations started on $startDate ***"
-    }
-    else
-    {
-        Log-Info "*** Post-Content Server upgrade migration operations started on $startDate ***"
-    }
-     
+    Log-Info "*** Content Server upgrade migration operations started on $startDate ***"
+
     # --------------------------- Validate environment ------------------------------------------
-    
+
     #check for configuration path validity
     $ConfigPath = Resolve-Path $ConfigPath -ErrorAction SilentlyContinue -ErrorVariable pathErr
     if ($pathErr)
@@ -57,138 +209,47 @@ try
     # initialize the environment
     $cfg = Initialize $ConfigPath
 
-    # Resolve and log config object content
-    Log-Verbose $cfg.dump()
-    Log-Verbose $cfg.show()
-    
-    # current current user's pwd
-    $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
-    if ($null -eq $pwd)
-    {
-     return
-    }
-    $cfg.user.pwd = $pwd
-
-    if (-not $PostUpgrade)
-    {   
-        # make sure the environment seems OK
-        $cfg = check $cfg
-    }
-
     # Prepare migration temp tables
     # Open ODBC connection
     $cnx = New-Connection $cfg.ToDbConnectionString()
     try
     {
-        if (-not $PostUpgrade)
-        {            
-            # --------------------- Performs pre-Content Server ugrade operations -----------------
-
-            # Retrieve the values for the email address and SMTP server used
-            set-Smtp_parameters -cnx $cnx -cfg $cfg
-
-            # performs sanity checks against data held in database
-            $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
-            if ($migCheck) 
+        # Retrieve extra dynamic values
+        Read-Dynamic-Conf -cnx $cnx -conf $cfg
+        # make sure the environment seems OK
+        $cfg = check $cfg $action
+        if ('install' -eq $action)
+        {
+            # current current user's pwd
+            $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
+            if ($null -eq $pwd)
             {
-                throw "Migration temporary tables already present"
+                return
             }
-            Check-Locations -cnx $cnx -cfg $cfg
+            $cfg.user.pwd = $pwd
 
-            # managing the install owner name change
-
-            # is there a change ?
-            $installOwnerChanged = Test-InstallOwnerChanged -cnx $cnx -cfg $cfg
-
-            if ($installOwnerChanged -ne [InstallOwnerChanges]::None)
-            {
-                # if we need to rename ...
-                if ($installOwnerChanged -band [InstallOwnerChanges]::Name)
-                {
-                    # ensuring current user does not exists
-                    Test-UserExists -cnx $cnx -cfg $cfg
-                }
-                # managing the change of install owner
-                Change-InstallOwner -cnx $cnx -cfg $cfg -scope $installOwnerChanged
-            }
-            else
-            {
-                Log-Info("Install owner has not changed")
-            }
-            # Disable all jobs 
-            Disable-Jobs -cnx $cnx -cfg $cfg
-
-            # Change target server on jobs
-            Update-JobsTargetServer -cnx $cnx -cfg $cfg
-
-            # Disable projections
-            Disable-Projections -cnx $cnx -name $cfg.resolve('docbase.config')
-
-            # Create the temporay table for custom indexes
-            Create-mig_indexesTable -cnx $cnx
-
-            # Save custom indexes definition in temp table and drop indexes
-            Save-CustomIndexes -cnx $cnx -cfg $cfg
-
-            # creating initialization files
-            Create-IniFiles($cfg)
-
-            # configuring registry
-            Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
-
-            # updating service files
-            Update-ServiceFile($cfg)
-
-            # creating service
-            New-DocbaseService $cfg.ToDocbaseService()
-
-            # updating the list of installed docbase
-            Update-DocbaseList($cfg)
-
-            # managing docbroker changes
-            Update-Docbrokers($cfg)
-
-            # managing file store changes
-            Update-Locations -cnx $cnx -cfg $cfg
-
-            # fixing some dm_location
-            Update-DmLocations -cnx $cnx -cfg $cfg
-
-            # Fix mount points
-            Update-MountPoint -cnx $cnx -cfg $cfg
-
-            # Update Server config
-            Update-ServerConfig -cnx $cnx -cfg $cfg
-
-            # Update app_server_uri in server config
-            Update-AppServerURI -cnx $cnx -cfg $cfg
-
-            # ------------------- Start Content Server service ------------------------------------
-            Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
-
-            # ------------------- Perform CS upgrade to version 7.1 -------------------------------
-            
-            # Execute dmbasic script prior to installing DARs
-            Start-DmbasicScriptCollection($cfg.resolve('dmbasic.run_before_dar_install'))
-
-            # Install DARs
-            # TODO
-
-            # Execute dmbasic script after installing DARs
-            Start-DmbasicScriptCollection($cfg.resolve('dmbasic.run_after_dar_install'))
+            installServer -cnx $cnx -cfg $cfg
+            upgradeServer -cfg $cfg
+            restoreServer -cnx $cnx
+        }
+        elseif ('upgrade' -eq $action)
+        {
+            upgradeServer -cfg $cfg
+        }
+        elseif ('uninstall' -eq $action)
+        {
+            uninstallServer -cfg $cfg
+        }
+        elseif ('dump' -eq $action)
+        {
+            write 'configuration (raw):'
+            write $cfg.dump()
+            write 'configuration (resolved):'
+            write $cfg.show()
         }
         else
         {
-            # ------------------- Performs post-Content Server ugrade operations ------------------
-                     
-            # Recreate indexes from definition stored in temp table   
-            Restore-CustomIndexes -cnx $cnx
-
-            # Re-activate jobs
-            Restore-ActiveJobs -cnx $cnx
-
-            # Remove temporary mig tables
-            Remove-MigrationTables -cnx $cnx
+            throw "unexpected action to perform: '$action'"
         }
     }
     finally
@@ -197,7 +258,7 @@ try
         {
             $cnx.Close()
         }
-    }   
+    }
 }
 catch
 {

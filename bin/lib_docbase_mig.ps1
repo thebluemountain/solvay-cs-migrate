@@ -76,7 +76,7 @@ function New-DocbaseService($obj)
 #> 
 function Create-IniFiles($cfg)
 {
-    $inipath = $cfg.resolve('docbase.config_folder')
+    $inipath = $cfg.resolve('docbase.daemon.dir')
     $ini = $cfg.resolve('docbase.daemon.ini')
     New-Item -Path $inipath -ItemType "directory" -Force | Out-Null
     Copy-Item -Path $cfg.resolve('file.server_ini') -Destination $ini | Out-Null
@@ -136,7 +136,6 @@ function Update-DocbaseList($cfg)
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.previous.version'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_NAME", $cfg.resolve('docbase.database'))
-
     Log-Info("List of installed docbase successfully updated in $dm_dctm_cfg")
 }
 
@@ -925,74 +924,203 @@ function Disable-Projections ($cnx, $name)
 }
 
 <#
-    Displays the smtp server and email address used by the current docbase
+    the method that retrieves dynamic data from the instance for use by the upgrade
+    namely, the email address, the SMTP server's name, the locale and the connection mode 
+    are retrieved.
+    the following configuration entries are upated:
+    docbase.email ('')
+    docbase.locale ('en')
+    docbase.smtp ('localhost')
+    docbase.connection_mode ('native')
 #>
-function Set-Smtp_parameters($cnx, $cfg)
-{   
-    $cfg.docbase.email_address = Execute-Scalar -cnx $cnx -sql "SELECT user_address FROM dm_user_s WHERE user_name= '$($cfg.resolve('docbase.previous.name'))'"    
-    if ($null -eq $cfg.docbase.email_address)
+function Read-Dynamic-Conf ($cnx, $conf)
+{
+
+    # we need to have a 'location.storage_01' (= \\LABAD01\shares\RCSEHS\content_storage_01)
+    # value to build the docbase.datahome 
+    # (get-item '\\LABAD01\shares\RCSEHS\content_storage_01' ).Parent.Parent.FullName
+    $primarystore = $cfg.resolve('location.storage_01')
+    if ($null -eq $primarystore)
     {
-        Log-Warning "Failed to identify email address"
-        $cfg.docbase.email_address = 'unknown@email.address'
+        throw 'Missing required ''location.storage_01 path'''
+    }
+    $datahome = (get-item $primarystore ).parent.parent.fullname
+    if ($null -eq $datahome)
+    {
+        throw "location path for storage_01 ($primarystore) does not have any grand-parent"
+    }
+    $cfg.docbase.datahome = $datahome
+    Log-Verbose "computed datahome to match: '$datahome'"
+
+    # the email address to use by default ...
+    $email = Execute-Scalar -cnx $cnx -sql ('SELECT user_address FROM dm_user_s WHERE user_name= ''' + $conf.resolve('docbase.previous.name') + '''')
+    if ($null -eq $cfg.email)
+    {
+        $conf.docbase.email = ''
+        Log-Warning 'Failed to identify email address'
+    }
+    else
+    {
+        $conf.docbase.email = $email
+        Log-Verbose "using the following email address: '$email'"
     }
 
-    Log-Verbose "Email address: $($cfg.docbase.smtp_server_name)"
-    
-    $cfg.docbase.smtp_server_name =  Execute-Scalar -cnx $cnx -sql "SELECT smtp_server FROM  dm_server_config_sv WHERE (i_has_folder = 1 AND object_name = '$($cfg.resolve('docbase.config'))')"
-    if ($null -eq $cfg.docbase.smtp_server_name)
+    # data from the server's configuration
+    $result = Select-Table -cnx $cnx -sql ('SELECT locale_name, smtp_server, secure_connect_mode FROM dm_server_config_sv WHERE object_name = ''' + $conf.resolve('docbase.config') + ''' AND i_has_folder = 1')
+    try 
     {
-        Log-Warning "Failed to identify smtp server name"
-        $cfg.docbase.smtp_server_name = ''
+        if ($result.Rows.Count -eq 0)
+        {
+            throw 'Failed to find server config named ''' + $conf.resolve('docbase.config') + ''''
+        }
+        $row = $result.Rows[0]
+        $locale = $row['locale_name']
+        $smtp = $row['smtp_server']
+        $mode = $row['secure_connect_mode']
+        if ($locale)
+        {
+            $conf.docbase.locale = $locale
+            Log-Verbose "server's locale name set to '$locale'"
+        }
+        else
+        {
+            $locale = $conf.resolve('docbase.locale')
+            if ($locale)
+            {
+                Log-Warning "there is no locale associated to the server, using '$locale'"
+            }
+            else
+            {
+                $conf.docbase.locale = 'en'
+                Log-Warning 'there is no locale associated to the server nor any default, using ''en'''
+            }
+        }
+        if ($smtp)
+        {
+            $conf.docbase.smtp = $smtp
+        }
+        else
+        {
+            $smtp = $conf.resolve('docbase.smtp')
+            if ($smtp)
+            {
+                Log-Warning "there is no SMTP server associated to the server, using '$smtp'"
+            }
+            else
+            {
+                $conf.docbase.smtp = 'localhost'
+                Log-Warning 'there is no SMTP server associated to current server configuration nor any default, using ''localhost'''
+            }
+        }
+        if ($mode)
+        {
+            $conf.docbase.connect_mode = $mode
+            Log-Verbose "connection model set to '$mode'"
+        }
+        else
+        {
+            $mode = $conf.resolve('docbase.connect_mode')
+            if ($mode)
+            {
+                Log-Warning "there is no connection mode associated to the server, using '$mode'"
+            }
+            else
+            {
+                $conf.docbase.connect_mode = 'native'
+                Log-Warning 'there is no connection mode associated to the server configuration nor any default, using ''native'''
+            }
+        }
     }
-    Log-Verbose "SMTP Server: $($cfg.docbase.email_address)"
+    finally
+    {
+        $result.Dispose()
+    }
+
+    # computes the hexid for the docbase: 8 digits representation
+    $id = $conf.resolve('docbase.id')
+    [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
+    $hex = $val.ToString('x8')
+    $conf.docbase.hexid = $hex
+
+    Log-Info ('fetched dynamic data from install owner user and current server configuration')
 }
-
 
 function Start-ContentServerService($Name)
 {
     $csService = Get-Service $Name -ErrorAction Stop
     if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
     {
-        throw "Content server is not stopped."
+        throw 'Content server is not stopped.'
     }
     Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
     Start-Service $csService -ErrorAction Stop
     Log-Info "Content Server service '$csServiceName' successfully started"
 }
 
-function Start-DmbasicScript($scriptname, $cfg)
-{    
-    $scriptobj = $cfg.dmbasic.scripts.($scriptname)
-    if ($null -eq $scriptobj)
+function Start-ContentServerServiceIf($Name)
+{
+    $csService = Get-Service $Name -ErrorAction Stop
+    if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running)
     {
-        throw "Cannot fing config data for script $scriptname"
+        Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+        Start-Service $csService -ErrorAction Stop
+        Log-Info "Content Server service '$csServiceName' successfully started"
+    }
+    else
+    {
+        Log-Verbose "Content Server service '$csServiceName' not started as its state currently is: $csService.Status"
+    }
+}
+
+function Stop-ContentServerServiceIf($Name)
+{
+    $csService = Get-Service $Name -ErrorAction SilentlyContinue
+    if ($null -ne $csService)
+    {
+        if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
+        {
+            Log-Info "Stopping Content Server service '$csServiceName'. This may take a while..."
+            Start-Service $csService -ErrorAction Stop
+            Log-Info "Content Server service '$csServiceName' successfully stopped"
+        }
+        else
+        {
+            Log-Verbose "Content Server service '$csServiceName' is currently stopped"
+        }
+        (gwmi win32_service -filter "name='$csService'").delete()
+        Log-Info "Content Server service '$csService' successfully deleted"
+    }
+}
+
+function Start-DmbasicScript($cfg, $scriptname)
+{
+    Log-Info "Executing dmbasic script $script..."
+    $dmbasicargs = $cfg.resolve('docbase.upgrade.dmbasic.scripts.' + $scriptname)
+    if ($null -eq $dmbasicargs)
+    {
+        throw "Cannot fing config data for script $scriptname"
     }
 
-    $outPath = $cfg.resolve('docbase.config_folder') + '\'+ $scriptname + '.out'
+    $outPath = $cfg.resolve('docbase.daemon.dir') + '\'+ $scriptname + '.out'
     if (Test-Path($outPath))
     {
         throw "Script $scriptname appears to have been run already"
     }
-
-    $dmbasic = $cfg.resolve('env.dm_home') + '\bin\dmbasic.exe'
-    $dmbasicargs = $cfg.resolve("dmbasic.scripts.$scriptname")
+    $dmbasic = $cfg.resolve('docbase.tools.dmbasic')
    
     Log-Verbose "Dmbasic script args = $dmbasicargs"
-
     Start-Process -FilePath $dmbasic -ArgumentList $dmbasicargs -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath
-
     Log-Verbose "Execution of script $scriptname completed"
 }
 
-
-function Start-DmbasicScriptCollection($str)
+function Start-DmbasicStep($cfg, $step)
 {
-    $scriptList = $str.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)
+    $all = $cfg.resolve('docbase.upgrade.dmbasic.steps.' + $step)
+    $scripts = $all.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)
 
-    foreach ($script in $scriptList)
+    foreach ($script in $scripts)
     {
         $script = $script.Trim()
-        Log-Info "Executing dmbasic script $script..."
         Start-DMbasicScript -scriptname $script -cfg $cfg
     }
 }
