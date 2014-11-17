@@ -91,6 +91,7 @@ function BuildDars ($conf, $name)
     Log-Verbose ('about to run dar installation for ' + $this.name)
     Log-Verbose $program
     Log-Verbose $params
+    log-info ('about to install ' + $dars.length + ' DARS of step ' + $this.name + '. this may take a while')
     $res = & $program $params 2>&1
 
     # OK, should now have the dilog file: tests if there are any error

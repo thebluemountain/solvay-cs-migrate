@@ -1117,6 +1117,7 @@ function Start-DmbasicStep($cfg, $step)
 {
     $all = $cfg.resolve('docbase.upgrade.dmbasic.steps.' + $step)
     $scripts = $all.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)
+    log-info ('found ' + $scripts.length + ' docbasic scripts for step ' + $step)
 
     foreach ($script in $scripts)
     {

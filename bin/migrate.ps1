@@ -99,6 +99,7 @@ function installServer ($cnx, $cfg)
 
 function upgradeServer ($cfg)
 {
+    log-info ('starting the upgrade of server ' + $cfg.resolve('docbase.name') + '.' + $cfg.resolve('docbase.config'))
     # make sure the service is started for the server
     Start-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name')
 
@@ -107,7 +108,7 @@ function upgradeServer ($cfg)
     Start-DmbasicStep -cfg $cfg -step 'before'
 
     # Install DARs listed in 'main' set
-    $darbuilder = BuildDars $cfg 'main'
+    $darsbuilder = BuildDars $cfg 'main'
     $darsbuilder.Install()
 
     # Execute dmbasic script after installing DARs
@@ -117,13 +118,13 @@ function upgradeServer ($cfg)
 function restoreServer ($cnx)
 {
     # Recreate indexes from definition stored in temp table
-    Restore-CustomIndexes -cnx $cnx
+    Restore-CustomIndexes -cnx $cnx | out-null
 
     # Re-activate jobs
-    Restore-ActiveJobs -cnx $cnx
+    Restore-ActiveJobs -cnx $cnx | out-null
 
     # Remove temporary mig tables
-    Remove-MigrationTables -cnx $cnx
+    Remove-MigrationTables -cnx $cnx | out-null
 }
 
 function uninstallServer ($cfg)
@@ -251,6 +252,7 @@ try
         {
             throw "unexpected action to perform: '$action'"
         }
+        log-info ('done with migrate program')
     }
     finally
     {
