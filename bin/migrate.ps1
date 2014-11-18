@@ -134,8 +134,11 @@ function restoreServer ($cnx)
 function uninstallServer ($cfg)
 {
     $docbasename = $cfg.resolve('docbase.name')
+    $svcname = $cfg.resolve('docbase.daemon.name')
     # stopping the content server ...
-    Stop-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name') | Out-Null
+    Stop-ContentServerServiceIf -Name $svcname
+    # remove content server service instance
+    Remove-ContentServerServiceIf -Name $svcname
 
     # remove entries from services file ?
     $services = $cfg.resolve('file.services')
@@ -145,7 +148,7 @@ function uninstallServer ($cfg)
         $exp = '^' + $cfg.resolve('docbase.service') + '(_s)?.*$'
         if (0 -lt ((type $services) -match $exp).length)
         {
-            (type $services) -notmatch $exp | out-file $services
+            (type $services) -notmatch $exp | out-file -FilePath $services -Encoding 'ASCII'
             log-info "removed services entries for server $docbase.name"
         }
     }
@@ -155,7 +158,7 @@ function uninstallServer ($cfg)
     log-info "you should remove docbase section $docbasename' in txtfile"
 
     # remove registry entry
-    $reg = 'HKLM:\Software\Documentum\DOCBASES' + '\' + $docbasename
+    $reg = 'HKLM:\Software\Documentum\DOCBASES\' + $docbasename
     if (test-path $reg)
     {
         remove-item $reg -recurse  | Out-Null
@@ -201,7 +204,6 @@ try
     # Include dars functions
     . "$PSScriptRoot\lib_dars.ps1"
   
-
     $startDate = Get-Date  -Verbose
     Log-Info "*** Content Server upgrade migration operations started on $startDate ***"
 

@@ -98,6 +98,7 @@ function Create-IniFiles($cfg)
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_conn', $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_owner', $cfg.resolve('docbase.user'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'start_index_agents', 'F')
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'return_top_results_row_based', 'false')
     Log-Verbose ('configured the server.ini file')
 
     Log-Info ("initialization files successfully created in $inipath")
@@ -1052,9 +1053,9 @@ function Start-ContentServerService($Name)
     {
         throw 'Content server is not stopped.'
     }
-    Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+    Log-Info "Starting Content Server service '$Name'. This may take a while..."
     Start-Service $csService -ErrorAction Stop
-    Log-Info "Content Server service '$csServiceName' successfully started"
+    Log-Info "Content Server service '$Name' successfully started"
 }
 
 function Start-ContentServerServiceIf($Name)
@@ -1062,13 +1063,13 @@ function Start-ContentServerServiceIf($Name)
     $csService = Get-Service $Name -ErrorAction Stop
     if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running)
     {
-        Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+        Log-Info "Starting Content Server service '$Name'. This may take a while..."
         Start-Service $csService -ErrorAction Stop
-        Log-Info "Content Server service '$csServiceName' successfully started"
+        Log-Info "Content Server service '$Name' successfully started"
     }
     else
     {
-        Log-Verbose "Content Server service '$csServiceName' not already running"
+        Log-Verbose "Content Server service '$Name' not already running"
     }
 }
 
@@ -1079,17 +1080,37 @@ function Stop-ContentServerServiceIf($Name)
     {
         if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
         {
-            Log-Info "Stopping Content Server service '$csServiceName'. This may take a while..."
-            Start-Service $csService -ErrorAction Stop
-            Log-Info "Content Server service '$csServiceName' successfully stopped"
+            Log-Info "Stopping Content Server service '$Name'. This may take a while..."
+            Stop-Service $csService -ErrorAction Stop
+            Log-Info "Content Server service '$Name' successfully stopped"
         }
         else
         {
-            Log-Verbose "Content Server service '$csServiceName' is already stopped"
+            Log-Verbose "Content Server service '$Name' is already stopped"
         }
-        (gwmi win32_service -filter "name='$csService'").delete()
-        Log-Info "Content Server service '$csService' successfully deleted"
     }
+}
+
+function Remove-ContentServerServiceIf($name)
+{
+    $csService = Get-Service $Name -ErrorAction SilentlyContinue
+    if ($null -ne $csService)
+    {
+        if ($csService.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped)
+        {
+            (gwmi win32_service -filter "name='$name'").delete()
+            Log-Info "Content Server service '$name' successfully deleted"
+        }
+        else
+        {
+            Log-Warning "Cannot delete service '$Name': service is not stopped"
+        }
+    }
+    else
+    {
+        Log-Verbose "Service $name does not exist (may have been deleted aready)"
+    }
+
 }
 
 function Start-DmbasicScript($cfg, $scriptname)

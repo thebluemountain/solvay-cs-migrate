@@ -1208,25 +1208,19 @@ function checkEnv ($obj, $action)
    $obj.resolve('env.COMPUTERNAME') + 
    '. make sure the service is installed and runnning'
  }
- else
+ elseif ($action -eq 'install')
  {
   # make sure there is no server for name ${cfg.docbase.name} on docbroker
   $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','getservermap',$obj.resolve('docbase.name'))
   Log-Verbose $params
   $res = & 'dmqdocbroker'  $params 2>&1
   $val = $res | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:' -quiet
-  if (($action -eq 'install') -and (!$val))
+  if (!$val)
   {
    throw 'there is already a docbase ' + 
     $obj.resolve('docbase.name') + 
     '. registered on the docbroker'
-  }
-  elseif (($action -eq 'upgrade') -and $val)
-  {
-   throw 'there is already no docbase ' + 
-    $obj.resolve('docbase.name') + 
-    '. registered on the docbroker'
-  }
+  } 
  }
  Write-Host 'docbroker access checked...'
  return $obj
