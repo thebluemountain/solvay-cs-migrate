@@ -17,7 +17,7 @@ function _FindDocbase ($servlet, $name)
   $parval = $init.SelectSingleNode('param-value/text()')
   if ($null -eq $parval)
   {
-   throw 'found init-param element for docbase ''' + $name + ''' with no name'
+   throw "found init-param element for docbase $name with no name"
   }
   $value = $parval.Value.Trim()
   if ($value -ne $name)
@@ -46,7 +46,7 @@ function _checkLikeDocbase ([string] $str)
 <#
  # the method that returns the JMS configuration matching a file path
  #>
-function GetJMSConf ($path)
+function New-JmsConf ($path)
 {
  $xml = [xml] (Get-Content ($path))
  $obj = @{}
@@ -64,7 +64,7 @@ function GetJMSConf ($path)
    $init = _FindDocbase -servlet $servlet -name $name
    if ($null -ne $init)
    {
-    write-host 'docbase ''' $name ''' already registered'
+    Write-Verbose "docbase $name already registered"
    }
    else
    {
@@ -91,7 +91,7 @@ function GetJMSConf ($path)
      $servlet.InsertBefore($init, $load) | Out-Null
      $this._changed = $true
     }
-    write-host 'registered docbase ''' $name ''''
+    write-verbose "registered docbase $name"
    }
   } @args
  }
@@ -107,13 +107,13 @@ function GetJMSConf ($path)
    $init = _FindDocbase -servlet $servlet -name $name
    if ($null -eq $init)
    {
-    write-host 'docbase ''' $name ''' not registered'
+    Write-Verbose "docbase $name not registered"
    }
    else
    {
     $servlet.RemoveChild($init) | Out-Null
     $this._changed = $true
-    write-host 'unregistered docbase ''' $name ''''
+    Write-Verbose "unregistered docbase $name"
    }
   } @args
  }
@@ -154,31 +154,4 @@ function GetJMSConf ($path)
  }
  return $obj
 }
-
-<#
-$jms = GetJMSConf 'F:\migrate\web.xml'
-'docbases (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-
-$var = $jms.Register('ABC')
-'docbases after registering ABC (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$jms.Save()
-'saved docbases (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$var = $jms.Register('ABC')
-'docbases after registering ABC (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$var = $jms.Unregister('ABC')
-'docbases after unregistering ABC (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$var = $jms.Unregister('ABC')
-'docbases after unregistering ABC (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$jms.Save()
-'saved docbases (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-$var = $jms.Unregister('QUALITY')
-'docbases after unregistering QUALITY (changed: ' + $jms.Changed + '): ' + $jms.Docbases
-#>
-$names = [System.Collections.ArrayList]@('me', 'you')
-#$names += @('us')
-$names.Add('us')
-write-host $names
-$names.Remove('you')
-write-host $names
-write 'done'
 

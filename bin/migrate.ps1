@@ -93,12 +93,16 @@ function installServer ($cnx, $cfg)
     # Update app_server_uri in server config
     Update-AppServerURI -cnx $cnx -cfg $cfg
 
-    # ------------------- Start Content Server service ------------------------------------
-    Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
+    # Update ACS config
+    Update-AcsConfig -cnx $cnx -cfg $cfg
+
+    # Register Docbase to JMS
+    Register-DocbaseToJms -cfg $cfg
+    
 }
 
 function upgradeServer ($cfg)
-{
+{ 
     log-info ('starting the upgrade of server ' + $cfg.resolve('docbase.name') + '.' + $cfg.resolve('docbase.config'))
     # make sure the service is started for the server
     Start-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name')
@@ -184,6 +188,9 @@ try
 
     # Include config functions
     . "$PSScriptRoot\lib_config.ps1"
+      
+    # Include jms functions
+    . "$PSScriptRoot\lib_jms.ps1"
 
     # Include docbase registration functions
     . "$PSScriptRoot\lib_docbase_mig.ps1"
@@ -193,6 +200,7 @@ try
 
     # Include dars functions
     . "$PSScriptRoot\lib_dars.ps1"
+  
 
     $startDate = Get-Date  -Verbose
     Log-Info "*** Content Server upgrade migration operations started on $startDate ***"

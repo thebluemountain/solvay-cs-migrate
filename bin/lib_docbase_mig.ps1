@@ -1068,7 +1068,7 @@ function Start-ContentServerServiceIf($Name)
     }
     else
     {
-        Log-Verbose "Content Server service '$csServiceName' not started as its state currently is: $csService.Status"
+        Log-Verbose "Content Server service '$csServiceName' not already running"
     }
 }
 
@@ -1085,7 +1085,7 @@ function Stop-ContentServerServiceIf($Name)
         }
         else
         {
-            Log-Verbose "Content Server service '$csServiceName' is currently stopped"
+            Log-Verbose "Content Server service '$csServiceName' is already stopped"
         }
         (gwmi win32_service -filter "name='$csService'").delete()
         Log-Info "Content Server service '$csService' successfully deleted"
@@ -1124,4 +1124,55 @@ function Start-DmbasicStep($cfg, $step)
         $script = $script.Trim()
         Start-DMbasicScript -scriptname $script -cfg $cfg
     }
+}
+
+function Update-AcsConfig($cnx, $cfg)
+{
+    $docbase = $cfg.resolve('docbase.config') 
+    $newurl = "http://$($cfg.resolve('docbase.jms.host')):$($cfg.resolve('docbase.jms.port'))/ACS/servlet/ACS"
+    $sql =
+    "UPDATE dbo.dm_acs_config_r 
+     SET acs_base_url = '$newurl'
+      WHERE acs_base_url IS NOT NULL
+       AND acs_base_url <>''
+       AND r_object_id IN
+        (SELECT r_object_id  FROM [dbo].[dm_acs_config_sv]
+          WHERE i_has_folder = 1
+          AND svr_config_id IN
+           (SELECT r_object_id FROM dbo.dm_server_config_sv
+            WHERE i_has_folder = 1
+            AND object_name = '$docbase'))"
+
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+    Log-Verbose "acs_base_url successfully updated in 'dm_acs_config_r'"
+
+    $newtarget = $cfg.resolve('docbase.docbrokers.0.host')
+    $newport = $cfg.resolve('docbase.docbrokers.0.port')
+    $sql =
+    "UPDATE dbo.dm_acs_config_r 
+     SET projection_targets = '$newtarget', projection_ports = $newport
+      WHERE projection_targets IS NOT NULL 
+       AND projection_targets <> ''
+       AND r_object_id IN 
+        (SELECT r_object_id  FROM [dbo].[dm_acs_config_sv]
+          WHERE i_has_folder = 1
+          AND svr_config_id IN
+           (SELECT r_object_id FROM dbo.dm_server_config_sv
+            WHERE i_has_folder = 1
+            AND object_name = '$docbase'))"
+
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+    Log-Verbose "projection_targets and projection_ports successfully updated in 'dm_acs_config_r'"
+
+    Log-Info "ACS Config updated successfully"
+}
+
+function Register-DocbaseToJms($cfg)
+{    
+    $name = $cfg.resolve('docbase.name')
+    $jmsconf = New-JmsConf($cfg.resolve('docbase.jms.web_inf') + '\web.xml')
+    $jmsconf.Register($name)
+    $jmsconf.Save()
+
+    log-info "Docbase successfully registered to JMS"
 }

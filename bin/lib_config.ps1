@@ -783,6 +783,9 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.jms.host = '${' + $env + '.COMPUTERNAME}'
  $docbase.jms.port = 9080
 
+ # JMS Jboss path
+ $docbase.jms.web_inf = '${' + $db + '.tools.jms}\deployments\ServerApps.ear\DmMethods.war\WEB-INF'
+
  # regarding previous state
  $docbase.previous = createObj
  $docbase.previous.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
@@ -809,6 +812,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.tools.composer.dir = '${' + $db + '.tools.install}\composer'
  $docbase.tools.composer.workspace = '${' + $db + '.tools.composer.dir}\workspace'
  $docbase.tools.composer.headless = '${' + $db + '.tools.composer.dir}\ComposerHeadless'
+ $docbase.tools.jms = '${' + $env + '.DOCUMENTUM}\jboss7.1.1\server\DctmServer_MethodServer'
 
  # the configuration for the upgrade
  $docbase.upgrade = createObj
@@ -1382,7 +1386,7 @@ Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 function Log-Info($msg)
 {
-    Write-Output ('' + $msg)
+    Write-Host ('' + $msg)
 }
 
 function Log-Warning($msg)
