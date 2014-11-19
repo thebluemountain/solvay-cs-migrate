@@ -12,6 +12,45 @@ if ($null -eq $PSScriptRoot)
 }
 
 <#
+ the function that install a new server instance (for HA)
+ it assumes the server is already migrated in 7.1 version
+#>
+function installHAServer ($cnx, $cfg)
+{
+    # make sure the datamodel matches 7.1 and content stores are available
+    # for current user
+    Test-Running71 -cnx $cnx -conf $cfg
+
+    # Change target server on jobs
+    Update-JobsTargetServer -cnx $cnx -cfg $cfg
+
+    # Update app_server_uri in server config
+    Update-AppServerURI -cnx $cnx -cfg $cfg
+
+    # register the server onto its jms
+    # TODO: wait for frederic's update
+    #Update-JMSRegistration -conf $cfg
+
+    # configuring registry
+    Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
+
+    # updating service files
+    Update-ServiceFile $cfg
+
+    # creating service
+    New-DocbaseService $cfg.ToDocbaseService()
+
+    # updating the list of installed docbase
+    Update-DocbaseList $cfg
+
+    # managing docbroker changes
+    Update-Docbrokers $cfg
+
+    # ------------------- Start Content Server service ------------------------------------
+    Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
+}
+
+<#
  the function that installs a new server instance
 #>
 function installServer ($cnx, $cfg)
@@ -168,6 +207,22 @@ function uninstallServer ($cfg)
     log-info "done uninstalling server $docbasename"
 }
 
+function usage ()
+{
+    write-host 'migrate1.ps ${config.path} ${action}'
+    write-host 'where:'
+    write-host ' ${config.path}: is the path containing the server.ini, the lapxxx.cnt, '
+    write-host '   the dbpasswd.txt and the migrate.properties file of use'
+    write-host ' ${action} holds the action to perform. It either matches:'
+    write-host '   install: installs the content server and upgrades its version'
+    write-host '   installha: installs another content server instance of an already ' 
+    write-host '     upgraded docbase'
+    write-host '   upgrade: upgrades the matching docbase through the existing'
+    write-host '     content server'
+    write-host '   uninstall: uninstall an existing content server instance'
+    write-host '   dump: dumps the current configuration and the resolved equivalent'
+    write-host '   help: displays this screen'
+}
 try
 {
     # Start transcription of the PS session to a log file.
@@ -237,6 +292,10 @@ try
         {
             upgradeServer -cfg $cfg
         }
+        elseif ('installha' -eq $action)
+        {
+            installHAServer -cnx $cnx -cfg $cfg
+        }
         elseif ('uninstall' -eq $action)
         {
             uninstallServer -cfg $cfg
@@ -248,8 +307,13 @@ try
             write 'configuration (resolved):'
             write $cfg.show()
         }
+        elseif ('help' -eq $action)
+        {
+            usage
+        }
         else
         {
+            usage
             throw "unexpected action to perform: '$action'"
         }
         log-info ('done with migrate program')

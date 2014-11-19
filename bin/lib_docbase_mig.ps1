@@ -568,6 +568,30 @@ function Test-TableExists ($cnx, $name)
  return $false
 }
 
+<#
+ the method that checks that datamodel is currently marked as a 
+ 7.1 docbase.
+ The method just checks that the r_server_version of default server config 
+ matches 7.1.xxx
+#>
+function Test-Running71 ($cnx, $conf)
+{
+ $sql = 'SELECT r_server_version FROM dbo.dm_server_config_sv ' + 
+  'WHERE i_has_folder = 1 AND object_name = ''' + 
+ $conf.resolve('docbase.name') + ''''
+ $version = Execute-Scalar -cnx $cnx -sql $sql
+ # $version should match something like: '7.1.0000.0151  Win64.SQLServer'
+ # just get the 3 first characters to ensure it matches
+ if (!$version)
+ {
+  throw 'cannot get current content server version from database'
+ }
+ if (!$version.StartsWith('7.1'))
+ {
+  throw 'unexpected content server version: ''' + $version + ''''
+ }
+}
+
 function Test-MigrationTables($cnx, $cfg)
 {
  $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
