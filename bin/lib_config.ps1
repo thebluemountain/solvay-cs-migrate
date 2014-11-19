@@ -928,10 +928,10 @@ function createDocbaseProps ($ini, $env, $db)
 
 function createUserProps ($env)
 {
-    $user = createObj
-    $user.name = '${' + $env + '.USERNAME}'
-    $user.domain = '${'+ $env + '.USERDOMAIN}'
-    return $user
+ $user = createObj
+ $user.name = '${' + $env + '.USERNAME}'
+ $user.domain = '${'+ $env + '.USERDOMAIN}'
+ return $user
 }
 
 function GetDocbaseProps ($obj, $path)
@@ -996,7 +996,10 @@ function Initialize ($path)
 
 
 <#
- the method that ensures the environment is OK for further processing
+ # The method that ensures the environment is OK for further processing.
+ #
+ # It does so by ensuring all mandatory data is available in the object 
+ # for the supplied action to run accordingly.
  #>
 function checkObj ($obj, $action)
 {
@@ -1040,7 +1043,7 @@ function checkObj ($obj, $action)
  {
   throw 'leading or trailing spaces in value for docbase.database: ''' + $val + ''''
  }
- # should have a dsn (tns ?)
+ # should have a dsn (tns ?) ...
  $val = $obj.resolve('docbase.dsn')
  if ($null -eq $val)
  {
@@ -1050,7 +1053,7 @@ function checkObj ($obj, $action)
  {
   throw 'leading or trailing spaces in value for docbase.dns: ''' + $val + ''''
  }
- # should have a database user login name
+ # ... a database user login name
  $val = $obj.resolve('docbase.user')
  if ($null -eq $val)
  {
@@ -1059,6 +1062,16 @@ function checkObj ($obj, $action)
  if ($val -ne $val.Trim())
  {
   throw 'leading or trailing spaces in value for docbase.user: ''' + $val + ''''
+ }
+ # ... and a password
+ $val = $obj.resolve('docbase.pwd')
+ if ($null -eq $val)
+ {
+  throw 'docbase.pwd cannot be resolved'
+ }
+ if ($val -ne $val.Trim())
+ {
+  throw 'leading or trailing spaces in value for docbase.pwd: ''' + $val + ''''
  }
  # should have a service name
  $val = $obj.resolve('docbase.service')
@@ -1070,19 +1083,27 @@ function checkObj ($obj, $action)
  {
   throw 'leading or trailing spaces in value for docbase.service: ''' + $val + ''''
  }
- # should have a previous host
- $val = $obj.resolve('docbase.previous.host')
- if ($null -eq $val)
+ if (('installha' -eq $action) || ('install' -eq $action))
  {
-  throw 'docbase.previous.host cannot be resolved'
- }
- if ($val -ne $val.Trim())
- {
-  throw 'leading or trailing spaces in value for docbase.previous.host: ''' + $val + ''''
- }
- # make sure we have location (re)definition
- if (-not $obj.ContainsKey('location')) {
-  throw 'No entries for file store mapping defined in migrate.properties'
+  if ('install' -eq $action)
+  {
+   # should have a previous host for the installation
+   $val = $obj.resolve('docbase.previous.host')
+   if ($null -eq $val)
+   {
+    throw 'docbase.previous.host cannot be resolved'
+   }
+   if ($val -ne $val.Trim())
+   {
+    throw 'leading or trailing spaces in value for docbase.previous.host: ''' + $val + ''''
+   }
+  }
+
+  # make sure we have location (re)definition
+  if (-not $obj.ContainsKey('location'))
+  {
+   throw 'No entries for file store mapping defined in migrate.properties'
+  }
  }
  # ... TODO: make other tests: the more we make here, 
  # the faster user will know about mistakes
@@ -1096,7 +1117,7 @@ function checkObj ($obj, $action)
  #>
 function checkEnv ($obj, $action)
 {
- if (($action -ne 'install') -and ($action -ne 'upgrade'))
+ if (($action -ne 'install') -and ($action -ne 'upgrade') -and ($action -ne 'installha'))
  {
   # don't go any further
   return $obj
@@ -1107,7 +1128,7 @@ function checkEnv ($obj, $action)
  $exists = test-path $val
  if ($exists)
  {
-  if ($action -eq 'install')
+  if (($action -eq 'install') -or ($action -eq 'installha'))
   {
    throw 'configuration directory ''' + $val + ''' for docbase ''' + 
     $obj.resolve('docbase.name') + ''' already exists'
@@ -1128,7 +1149,7 @@ function checkEnv ($obj, $action)
  $exists = test-path $val
  if ($exists)
  {
-  if ($action -eq 'install')
+  if (($action -eq 'install') -or ($action -eq 'installha'))
   {
    throw 'registry key ''' + $val + ''' for docbase ''' + 
     $obj.resolve('docbase.name') + ''' already exists'
@@ -1150,7 +1171,7 @@ function checkEnv ($obj, $action)
  $pattern = '^' + $obj.resolve('docbase.service') + '(_s)?.*$'
  $val = select-string -pattern ($pattern) -path ($obj.resolve('file.services'))
  $count = $val.length
- if (($action -eq 'install') -and (0 -ne $count))
+ if ((($action -eq 'install') -or ($action -eq 'installha')) -and (0 -ne $count))
  {
   throw 'service ' + $obj.resolve('docbase.service') + 
    ' already exists in file ' + $obj.resolve('file.services') + 
@@ -1174,7 +1195,7 @@ function checkEnv ($obj, $action)
  # make sure there is no service named ${cfg.docbase.daemon.name}
  $val = 'Name=''' + $obj.resolve('docbase.daemon.name') + ''''
  $val = Get-WmiObject -Class Win32_Service -Filter ('Name=''' + $obj.resolve('docbase.daemon.name') + '''')
- if (($action -eq 'install') -and ($val))
+ if ((($action -eq 'install') -or ($action -eq 'installha')) -and ($val))
  {
   throw 'a service named ' + $obj.resolve('docbase.daemon.name') + ' already exists'
  }
@@ -1183,19 +1204,6 @@ function checkEnv ($obj, $action)
   throw 'there is no service named ' + $obj.resolve('docbase.daemon.name')
  }
  Write-Host 'windows service existence checked...'
- # make sure we have a docbase.dsn, docbase.user and docbase.pwd
- if (!$obj.resolve('docbase.dsn'))
- {
-  throw 'missing docbase.dsn property'
- }
- if (!$obj.resolve('docbase.user'))
- {
-  throw 'missing docbase.user property'
- }
- if (!$obj.resolve('docbase.pwd'))
- {
-  throw 'missing docbase.pwd property'
- }
 
  # make sure docbroker is running on ${cfg.docbroker.host}:${cfg.docbroker.port}
  $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','ping')
@@ -1228,7 +1236,7 @@ function checkEnv ($obj, $action)
 
 function checkDB ($obj, $action)
 {
- if (($action -ne 'install') -and ($action -ne 'upgrade'))
+ if (($action -ne 'install') -and ($action -ne 'installha') -and ($action -ne 'upgrade'))
  {
   # don't go any further
   return $obj
@@ -1335,25 +1343,27 @@ function asDocbaseRegistry ($obj)
  return $reg
 }
 
-
+<#
+ the method that returns the object holding the data to create a service
+#>
 function asDocbaseService($obj)
 {
-    $svc = createObj
-    $svc.name = $obj.resolve('docbase.daemon.name')
-    $svc.display = $obj.resolve('docbase.daemon.display')
-    $svc.commandLine = $obj.resolve('docbase.daemon.cmd')
-    $usr = $obj.resolve('user.domain') + '\'+ $obj.resolve('user.name')
-    $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.user.pwd)
-    return $svc
+ $svc = createObj
+ $svc.name = $obj.resolve('docbase.daemon.name')
+ $svc.display = $obj.resolve('docbase.daemon.display')
+ $svc.commandLine = $obj.resolve('docbase.daemon.cmd')
+ $usr = $obj.resolve('user.domain') + '\'+ $obj.resolve('user.name')
+ $svc.credentials = New-Object System.Management.Automation.PSCredential ( $usr, $obj.user.pwd)
+ return $svc
 }
 
 <#
-
+ the method that returns the ODBC connection string for the configuration
 #>
 function asDbConnectionString($obj)
 {
-    $cnxstring = 'dsn=' + $obj.resolve('docbase.dsn') + ';uid=' + $obj.resolve('docbase.user') + ';pwd=' + $obj.resolve('docbase.pwd')
-    return $cnxstring
+ $cnxstring = 'dsn=' + $obj.resolve('docbase.dsn') + ';uid=' + $obj.resolve('docbase.user') + ';pwd=' + $obj.resolve('docbase.pwd')
+ return $cnxstring
 }
 
 
@@ -1380,21 +1390,21 @@ Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 function Log-Info($msg)
 {
-    Write-Host ('' + $msg)
+ Write-Host ('' + $msg)
 }
 
 function Log-Warning($msg)
 {
-    Write-Warning ('' + $msg)
+ Write-Warning ('' + $msg)
 }
 
 function Log-Error($msg)
 {
-    Write-Error ('' + $msg)
+ Write-Error ('' + $msg)
 }
 
 
 function Log-Verbose($msg)
 {
-    Write-Verbose ('' + $msg)
+ Write-Verbose ('' + $msg)
 }
