@@ -1116,8 +1116,8 @@ function Remove-ContentServerServiceIf($name)
 function Start-DmbasicScript($cfg, $scriptname)
 {
     Log-Info "Executing dmbasic script $script..."
-    $dmbasicargs = $cfg.resolve('docbase.upgrade.dmbasic.scripts.' + $scriptname)
-    if ($null -eq $dmbasicargs)
+    $dmscript = $cfg.resolve('docbase.upgrade.dmbasic.scripts.' + $scriptname)
+    if ($null -eq $dmscript)
     {
         throw "Cannot fing config data for script $scriptname"
     }
@@ -1129,9 +1129,17 @@ function Start-DmbasicScript($cfg, $scriptname)
     }
     $dmbasic = $cfg.resolve('docbase.tools.dmbasic')
    
-    Log-Verbose "Dmbasic script args = $dmbasicargs"
-    Start-Process -FilePath $dmbasic -ArgumentList $dmbasicargs -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath
-    Log-Verbose "Execution of script $scriptname completed"
+    Log-Verbose "Dmbasic script args = $($dmscript.Arguments)"
+    $proc = Start-Process -FilePath $dmbasic -ArgumentList $dmscript.Arguments -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath -Passthru
+    if ($proc.ExitCode -eq $dmscript.ExitCode)
+    {
+        Log-Verbose "Execution of script $scriptname completed"
+    }
+    else 
+    {
+        $out = gc $outPath -Tail 5
+        Log-Error "Script $scriptname exited with error code $($proc.ExitCode)`r`n------ Start Script Output ---------`r`n[...] $out`r`n-------- End Script Output ---------`r`nSee $outPath for complete logs.`r`n"
+    }
 }
 
 function Start-DmbasicStep($cfg, $step)

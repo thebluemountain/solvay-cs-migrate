@@ -172,6 +172,25 @@ function uninstallServer ($cfg)
         remove-item $init -recurse  | Out-Null
         log-info "removed directory $init"
     }
+
+    # Unregister docbase from docbrokers
+    $docbrokers = $cfg.docbase.docbrokers
+    foreach($i in $docbrokers.Keys)
+    {       
+        $hostname = $cfg.resolve('docbase.docbrokers.' + $i + '.host')
+        $port = $cfg.resolve('docbase.docbrokers.' + $i + '.port')
+        try 
+        {             
+            Start-Process -FilePath '"F:\Documentum\product\7.1\bin\dmqdocbroker.bat"' -ArgumentList "-t $hostname -p $port -c deregister $docbasename" -NoNewWindow -Wait -ErrorAction stop
+            Log-Verbose "Unregistered docbase $docbasename from Docbroker $i host= $hostname port= $port"
+        }
+        catch 
+        {
+            Log-Warning "Failed to docbase $docbasename from Docbroker $i host= $hostname port= $port - $($_.Exception.Message)"
+        }
+        
+    }
+
     log-info "done uninstalling server $docbasename"
 }
 
