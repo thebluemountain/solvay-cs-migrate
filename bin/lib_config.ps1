@@ -783,6 +783,9 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.jms.host = '${' + $env + '.COMPUTERNAME}'
  $docbase.jms.port = 9080
 
+ # JMS Jboss path
+ $docbase.jms.web_inf = '${' + $db + '.tools.jms}\deployments\ServerApps.ear\DmMethods.war\WEB-INF'
+
  # regarding previous state
  $docbase.previous = createObj
  $docbase.previous.name = '${' + $ini + '.SERVER_STARTUP.install_owner}'
@@ -809,6 +812,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.tools.composer.dir = '${' + $db + '.tools.install}\composer'
  $docbase.tools.composer.workspace = '${' + $db + '.tools.composer.dir}\workspace'
  $docbase.tools.composer.headless = '${' + $db + '.tools.composer.dir}\ComposerHeadless'
+ $docbase.tools.jms = '${' + $env + '.DOCUMENTUM}\jboss7.1.1\server\DctmServer_MethodServer'
 
  # the configuration for the upgrade
  $docbase.upgrade = createObj
@@ -1204,25 +1208,19 @@ function checkEnv ($obj, $action)
    $obj.resolve('env.COMPUTERNAME') + 
    '. make sure the service is installed and runnning'
  }
- else
+ elseif ($action -eq 'install')
  {
   # make sure there is no server for name ${cfg.docbase.name} on docbroker
   $params = @('-t',$obj.resolve('docbase.docbrokers.0.host'),'-p',$obj.resolve('docbase.docbrokers.0.port'),'-c','getservermap',$obj.resolve('docbase.name'))
   Log-Verbose $params
   $res = & 'dmqdocbroker'  $params 2>&1
   $val = $res | select-string -simplematch '[DM_DOCBROKER_E_NO_SERVERS_FOR_DOCBASE]error:' -quiet
-  if (($action -eq 'install') -and (!$val))
+  if (!$val)
   {
    throw 'there is already a docbase ' + 
     $obj.resolve('docbase.name') + 
     '. registered on the docbroker'
-  }
-  elseif (($action -eq 'upgrade') -and $val)
-  {
-   throw 'there is already no docbase ' + 
-    $obj.resolve('docbase.name') + 
-    '. registered on the docbroker'
-  }
+  } 
  }
  Write-Host 'docbroker access checked...'
  return $obj
@@ -1382,7 +1380,7 @@ Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 function Log-Info($msg)
 {
-    Write-Output ('' + $msg)
+    Write-Host ('' + $msg)
 }
 
 function Log-Warning($msg)

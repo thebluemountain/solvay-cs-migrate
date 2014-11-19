@@ -98,6 +98,7 @@ function Create-IniFiles($cfg)
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_conn', $cfg.resolve('docbase.dsn'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_owner', $cfg.resolve('docbase.user'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'start_index_agents', 'F')
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'return_top_results_row_based', 'false')
     Log-Verbose ('configured the server.ini file')
 
     Log-Info ("initialization files successfully created in $inipath")
@@ -1076,9 +1077,9 @@ function Start-ContentServerService($Name)
     {
         throw 'Content server is not stopped.'
     }
-    Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+    Log-Info "Starting Content Server service '$Name'. This may take a while..."
     Start-Service $csService -ErrorAction Stop
-    Log-Info "Content Server service '$csServiceName' successfully started"
+    Log-Info "Content Server service '$Name' successfully started"
 }
 
 function Start-ContentServerServiceIf($Name)
@@ -1086,13 +1087,13 @@ function Start-ContentServerServiceIf($Name)
     $csService = Get-Service $Name -ErrorAction Stop
     if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running)
     {
-        Log-Info "Starting Content Server service '$csServiceName'. This may take a while..."
+        Log-Info "Starting Content Server service '$Name'. This may take a while..."
         Start-Service $csService -ErrorAction Stop
-        Log-Info "Content Server service '$csServiceName' successfully started"
+        Log-Info "Content Server service '$Name' successfully started"
     }
     else
     {
-        Log-Verbose "Content Server service '$csServiceName' not started as its state currently is: $csService.Status"
+        Log-Verbose "Content Server service '$Name' not already running"
     }
 }
 
@@ -1103,17 +1104,37 @@ function Stop-ContentServerServiceIf($Name)
     {
         if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
         {
-            Log-Info "Stopping Content Server service '$csServiceName'. This may take a while..."
-            Start-Service $csService -ErrorAction Stop
-            Log-Info "Content Server service '$csServiceName' successfully stopped"
+            Log-Info "Stopping Content Server service '$Name'. This may take a while..."
+            Stop-Service $csService -ErrorAction Stop
+            Log-Info "Content Server service '$Name' successfully stopped"
         }
         else
         {
-            Log-Verbose "Content Server service '$csServiceName' is currently stopped"
+            Log-Verbose "Content Server service '$Name' is already stopped"
         }
-        (gwmi win32_service -filter "name='$csService'").delete()
-        Log-Info "Content Server service '$csService' successfully deleted"
     }
+}
+
+function Remove-ContentServerServiceIf($name)
+{
+    $csService = Get-Service $Name -ErrorAction SilentlyContinue
+    if ($null -ne $csService)
+    {
+        if ($csService.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped)
+        {
+            (gwmi win32_service -filter "name='$name'").delete()
+            Log-Info "Content Server service '$name' successfully deleted"
+        }
+        else
+        {
+            Log-Warning "Cannot delete service '$Name': service is not stopped"
+        }
+    }
+    else
+    {
+        Log-Verbose "Service $name does not exist (may have been deleted aready)"
+    }
+
 }
 
 function Start-DmbasicScript($cfg, $scriptname)
@@ -1148,4 +1169,55 @@ function Start-DmbasicStep($cfg, $step)
         $script = $script.Trim()
         Start-DMbasicScript -scriptname $script -cfg $cfg
     }
+}
+
+function Update-AcsConfig($cnx, $cfg)
+{
+    $docbase = $cfg.resolve('docbase.config') 
+    $newurl = "http://$($cfg.resolve('docbase.jms.host')):$($cfg.resolve('docbase.jms.port'))/ACS/servlet/ACS"
+    $sql =
+    "UPDATE dbo.dm_acs_config_r 
+     SET acs_base_url = '$newurl'
+      WHERE acs_base_url IS NOT NULL
+       AND acs_base_url <>''
+       AND r_object_id IN
+        (SELECT r_object_id  FROM [dbo].[dm_acs_config_sv]
+          WHERE i_has_folder = 1
+          AND svr_config_id IN
+           (SELECT r_object_id FROM dbo.dm_server_config_sv
+            WHERE i_has_folder = 1
+            AND object_name = '$docbase'))"
+
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+    Log-Verbose "acs_base_url successfully updated in 'dm_acs_config_r'"
+
+    $newtarget = $cfg.resolve('docbase.docbrokers.0.host')
+    $newport = $cfg.resolve('docbase.docbrokers.0.port')
+    $sql =
+    "UPDATE dbo.dm_acs_config_r 
+     SET projection_targets = '$newtarget', projection_ports = $newport
+      WHERE projection_targets IS NOT NULL 
+       AND projection_targets <> ''
+       AND r_object_id IN 
+        (SELECT r_object_id  FROM [dbo].[dm_acs_config_sv]
+          WHERE i_has_folder = 1
+          AND svr_config_id IN
+           (SELECT r_object_id FROM dbo.dm_server_config_sv
+            WHERE i_has_folder = 1
+            AND object_name = '$docbase'))"
+
+    Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
+    Log-Verbose "projection_targets and projection_ports successfully updated in 'dm_acs_config_r'"
+
+    Log-Info "ACS Config updated successfully"
+}
+
+function Register-DocbaseToJms($cfg)
+{    
+    $name = $cfg.resolve('docbase.name')
+    $jmsconf = New-JmsConf($cfg.resolve('docbase.jms.web_inf') + '\web.xml')
+    $jmsconf.Register($name)
+    $jmsconf.Save()
+
+    log-info "Docbase successfully registered to JMS"
 }

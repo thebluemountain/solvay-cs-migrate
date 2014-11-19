@@ -132,12 +132,16 @@ function installServer ($cnx, $cfg)
     # Update app_server_uri in server config
     Update-AppServerURI -cnx $cnx -cfg $cfg
 
-    # ------------------- Start Content Server service ------------------------------------
-    Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
+    # Update ACS config
+    Update-AcsConfig -cnx $cnx -cfg $cfg
+
+    # Register Docbase to JMS
+    Register-DocbaseToJms -cfg $cfg
+    
 }
 
 function upgradeServer ($cfg)
-{
+{ 
     log-info ('starting the upgrade of server ' + $cfg.resolve('docbase.name') + '.' + $cfg.resolve('docbase.config'))
     # make sure the service is started for the server
     Start-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name')
@@ -169,8 +173,11 @@ function restoreServer ($cnx)
 function uninstallServer ($cfg)
 {
     $docbasename = $cfg.resolve('docbase.name')
+    $svcname = $cfg.resolve('docbase.daemon.name')
     # stopping the content server ...
-    Stop-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name') | Out-Null
+    Stop-ContentServerServiceIf -Name $svcname
+    # remove content server service instance
+    Remove-ContentServerServiceIf -Name $svcname
 
     # remove entries from services file ?
     $services = $cfg.resolve('file.services')
@@ -180,7 +187,7 @@ function uninstallServer ($cfg)
         $exp = '^' + $cfg.resolve('docbase.service') + '(_s)?.*$'
         if (0 -lt ((type $services) -match $exp).length)
         {
-            (type $services) -notmatch $exp | out-file $services
+            (type $services) -notmatch $exp | out-file -FilePath $services -Encoding 'ASCII'
             log-info "removed services entries for server $docbase.name"
         }
     }
@@ -190,7 +197,7 @@ function uninstallServer ($cfg)
     log-info "you should remove docbase section $docbasename' in txtfile"
 
     # remove registry entry
-    $reg = 'HKLM:\Software\Documentum\DOCBASES' + '\' + $docbasename
+    $reg = 'HKLM:\Software\Documentum\DOCBASES\' + $docbasename
     if (test-path $reg)
     {
         remove-item $reg -recurse  | Out-Null
@@ -239,6 +246,9 @@ try
 
     # Include config functions
     . "$PSScriptRoot\lib_config.ps1"
+      
+    # Include jms functions
+    . "$PSScriptRoot\lib_jms.ps1"
 
     # Include docbase registration functions
     . "$PSScriptRoot\lib_docbase_mig.ps1"
@@ -248,7 +258,7 @@ try
 
     # Include dars functions
     . "$PSScriptRoot\lib_dars.ps1"
-
+  
     $startDate = Get-Date  -Verbose
     Log-Info "*** Content Server upgrade migration operations started on $startDate ***"
 
