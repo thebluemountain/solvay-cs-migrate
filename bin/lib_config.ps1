@@ -822,7 +822,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.steps = createObj
  # TODO: the invocation of the toolset.ebs normally generates the the file 'applyadmin.out'
  $docbase.upgrade.dmbasic.steps.before = 'headstart,dm_apply_formats,dm_cas_install,csec_plugin,dm_routerConv_install,templates,replicate_bootstrap,desktop_client,disable_fulltext_jobs,dfc,dfc_javadbexpr,dm_bpmmodules_install,createMethodServerObject,csec_plugin_upgrade_53,toolset,dm_bpm_install,dm_wfTimer_upgrade,create_fulltext_objects,dm_ldap_install,dm_storageservices_install,dm_emailTemplate_install'
- $docbase.upgrade.dmbasic.steps.after = ''
+ $docbase.upgrade.dmbasic.steps.after = 'dm_defaultevent_set,dm_jms_config_setup,dm_gr_config,javaAdminMethodInstall'
 
  $docbase.upgrade.dmbasic.scripts = createObj
  $docbase.upgrade.dmbasic.scripts.headstart = '-f "${docbase.tools.dmscripts}\headstart.ebs" "${docbase.tools.dmscripts}\headstart2.ebs" -P "${docbase.name}.${docbase.config}" "${env.USERNAME}" "" "" "${env.DM_HOME}" "${docbase.datahome}" "${docbase.tools.dba}" "${docbase.tools.install}" "${docbase.tools.share}" "${docbase.tools.fulltext}\dsearch" "${env.COMPUTERNAME}" "Windows" "en" "${docbase.smtp}" "${docbase.email}" "${env.USERNAME}" "${docbase.connect_mode}" "${docbase.jms.port}" "" "TRUE" dsearch -e Install'
@@ -846,6 +846,11 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.dm_ldap_install = '-f "${docbase.tools.dmscripts}\dm_ldap_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_storageservices_install = '-f "${docbase.tools.dmscripts}\dm_storageservices_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" "F" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install = '-f "${docbase.tools.dmscripts}\dm_emailTemplate_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_defaultevent_set = '-e Install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.dm_jms_config_setup = '-e install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.COMPUTERNAME}" ${docbase.jms.port}'
+ $docbase.upgrade.dmbasic.scripts.dm_gr_config = '-e Install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall = '-e EntryPoint -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+
 
  # the dars to run
  $docbase.upgrade.dars = createObj
