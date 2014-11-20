@@ -84,6 +84,7 @@ function Create-IniFiles($cfg)
 
     Copy-Item -Path $cfg.resolve('file.dbpasswd_txt') -Destination ($inipath + '\dbpasswd.txt') | Out-Null
     Log-Verbose ('dbpasswd.txt file successfully copied into ' + $inipath)
+    
     New-Item -Path $inipath -name dbpasswd.tmp.txt -itemtype "file" -value $cfg.resolve('docbase.pwd') | Out-Null
     Log-Verbose ('dbpasswd.tmp.txt file successfully created in ' + $inipath)
 
@@ -1116,29 +1117,48 @@ function Remove-ContentServerServiceIf($name)
 function Start-DmbasicScript($cfg, $scriptname)
 {
     Log-Info "Executing dmbasic script $script..."
-    $dmscript = $cfg.resolve('docbase.upgrade.dmbasic.scripts.' + $scriptname)
-    if ($null -eq $dmscript)
-    {
-        throw "Cannot fing config data for script $scriptname"
-    }
-
+    $args = $cfg.resolve("docbase.upgrade.dmbasic.scripts.$scriptname.Arguments")
+    $exitcode = $cfg.resolve("docbase.upgrade.dmbasic.scripts.$scriptname.ExitCode")
+    $dmbasic = $cfg.resolve('docbase.tools.dmbasic')
     $outPath = $cfg.resolve('docbase.daemon.dir') + '\'+ $scriptname + '.out'
+    $ErrPath = $cfg.resolve('docbase.daemon.dir') + '\'+ $scriptname + '.err'
+
+    $noentrypointpattern = 'dmbasic: The entry point .+ does not exist'
     if (Test-Path($outPath))
     {
         throw "Script $scriptname appears to have been run already"
     }
-    $dmbasic = $cfg.resolve('docbase.tools.dmbasic')
-   
-    Log-Verbose "Dmbasic script args = $($dmscript.Arguments)"
-    $proc = Start-Process -FilePath $dmbasic -ArgumentList $dmscript.Arguments -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath -Passthru
-    if ($proc.ExitCode -eq $dmscript.ExitCode)
-    {
-        Log-Verbose "Execution of script $scriptname completed"
+    Log-Verbose "$scriptname expected exit code=$exitcode, args=$args"
+    $proc = Start-Process -FilePath $dmbasic -ArgumentList $args -NoNewWindow -Wait -ErrorAction Stop -RedirectStandardOutput $outPath -RedirectStandardError $ErrPath -Passthru
+    try 
+    {          
+        if ($proc.ExitCode -ne $exitcode)
+        {
+            $out = gc $outPath -Tail 5
+            throw "Script $scriptname exited with error code $($proc.ExitCode)`r`n------ Script output excerpt ---------`r`n...$out`r`n----------------------------------`r`nSee $outPath for complete logs.`r`n"       
+        }
+        elseif (0 -ne (Get-ItemProperty -Path $ErrPath).length)
+        {
+            $err = gc $ErrPath
+            throw "Script $scriptname exited with the following message in error log`r`n------ Script error  excerpt ---------`r`n...$err`r`n----------------------------------`r`nSee $errPath for complete logs.`r`n"
+        }
+        elseif($null -ne (gc $outPath | Select-String -Pattern $noentrypointpattern))
+        {
+            $out = gc $outPath
+            throw "Script $scriptname exited with the following error: $out"
+        }
+        else 
+        {
+            Log-Verbose "Execution of script $scriptname completed"
+        }
     }
-    else 
+    finally
     {
-        $out = gc $outPath -Tail 5
-        Log-Error "Script $scriptname exited with error code $($proc.ExitCode)`r`n------ Start Script Output ---------`r`n[...] $out`r`n-------- End Script Output ---------`r`nSee $outPath for complete logs.`r`n"
+        # Cleanup .err file if it doesn't contain anything.        
+        if  (0 -eq (Get-ItemProperty -Path $ErrPath).length)
+        {
+            Remove-Item $ErrPath 
+        }
     }
 }
 

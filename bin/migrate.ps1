@@ -117,6 +117,12 @@ function upgradeServer ($cfg)
 
     # Execute dmbasic script after installing DARs
     Start-DmbasicStep -cfg $cfg -step 'after'
+
+    # TODO - change version number to 7.1.0.151 in dm_documentum_config.txt
+
+#[DOCBASE_RCSEHS]
+#....
+#VERSION=7.1.0.151
 }
 
 function restoreServer ($cnx)
@@ -186,7 +192,7 @@ function uninstallServer ($cfg)
         }
         catch 
         {
-            Log-Warning "Failed to docbase $docbasename from Docbroker $i host= $hostname port= $port - $($_.Exception.Message)"
+            Log-Warning "Failed to unregister docbase $docbasename from Docbroker $i host= $hostname port= $port - $($_.Exception.Message)"
         }
         
     }
