@@ -821,12 +821,12 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic = createObj
  $docbase.upgrade.dmbasic.steps = createObj
  # TODO: the invocation of the toolset.ebs normally generates the the file 'applyadmin.out'
- $docbase.upgrade.dmbasic.steps.before = 'headstart,dm_apply_formats,dm_cas_install,csec_plugin,dm_routerConv_install,templates,replicate_bootstrap,desktop_client,disable_fulltext_jobs,dfc,dfc_javadbexpr,dm_bpmmodules_install,createMethodServerObject,csec_plugin_upgrade_53,toolset,dm_bpm_install,dm_wfTimer_upgrade,create_fulltext_objects,dm_ldap_install,dm_storageservices_install,dm_emailTemplate_install'
+ $docbase.upgrade.dmbasic.steps.before = 'headstart,dm_apply_formats,dm_cas_install,csec_plugin,dm_routerConv_install,templates,replicate_bootstrap,desktop_client,disable_fulltext_jobs,dfc,dfc_javadbexpr,dm_bpmmodules_install,createMethodServerObject,csec_plugin_upgrade_53,toolset,dm_bpm_install,dm_wfTimer_upgrade,create_fulltext_objects,dm_ldap_install,dm_storageservices_install,dm_emailTemplate_install,dm_xml_install,dm_gwm_install,upgrade_java_methods_51,ci_schema_install,display_config_setup,offline_config_setup,dm_archiveserver_upgrade,upgrade_contentreplication_job,dm_acs_install,dm_krb_util_config,dd_populate'
  $docbase.upgrade.dmbasic.steps.after = 'dm_defaultevent_set,dm_jms_config_setup,dm_gr_config,javaAdminMethodInstall'
 
  $docbase.upgrade.dmbasic.scripts = createObj
  $docbase.upgrade.dmbasic.scripts.headstart = createObj
- $docbase.upgrade.dmbasic.scripts.headstart.Arguments = '-f "${docbase.tools.dmscripts}\headstart.ebs" "${docbase.tools.dmscripts}\headstart2.ebs" -P "${docbase.name}.${docbase.config}" "${env.USERNAME}" "" "" "${env.DM_HOME}" "${docbase.datahome}" "${docbase.tools.dba}" "${docbase.tools.install}" "${docbase.tools.share}" "${docbase.tools.fulltext}\dsearch" "${env.COMPUTERNAME}" "Windows" "en" "${docbase.smtp}" "${docbase.email}" "${env.USERNAME}" "${docbase.connect_mode}" "${docbase.jms.port}" "" "TRUE" dsearch -e Install'
+ $docbase.upgrade.dmbasic.scripts.headstart.Arguments = '-f "${docbase.tools.dmscripts}\headstart.ebs" "${docbase.tools.dmscripts}\headstart2.ebs" -P "${docbase.name}.${docbase.config}" "${env.USERNAME}" "" "" "${env.DM_HOME}" "${docbase.datahome}" "${docbase.tools.dba}" "${docbase.tools.install}" "${docbase.tools.share}" "${docbase.tools.fulltext}" "${env.COMPUTERNAME}" "Windows" "en" "${docbase.smtp}" "${docbase.email}" "${env.USERNAME}" "${docbase.connect_mode}" "${docbase.jms.port}" "" "TRUE" dsearch -e Install'
  $docbase.upgrade.dmbasic.scripts.headstart.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_apply_formats = createObj
@@ -834,11 +834,11 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.dm_apply_formats.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_cas_install = createObj
- $docbase.upgrade.dmbasic.scripts.dm_cas_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_cas_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows"'
+ $docbase.upgrade.dmbasic.scripts.dm_cas_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_cas_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows" -e Entry_Point'
  $docbase.upgrade.dmbasic.scripts.dm_cas_install.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.csec_plugin = createObj
- $docbase.upgrade.dmbasic.scripts.csec_plugin.Arguments  = '-f "${docbase.tools.dmscripts}\csec_plugin.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows"'
+ $docbase.upgrade.dmbasic.scripts.csec_plugin.Arguments  = '-f "${docbase.tools.dmscripts}\csec_plugin.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows" -e install'
  $docbase.upgrade.dmbasic.scripts.csec_plugin.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.dm_routerConv_install = createObj
@@ -854,7 +854,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.replicate_bootstrap.ExitCode = 1
  
  $docbase.upgrade.dmbasic.scripts.desktop_client = createObj
- $docbase.upgrade.dmbasic.scripts.desktop_client.Arguments = '-f "${docbase.tools.install}\desktop_client\desktop_client.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}"'
+ $docbase.upgrade.dmbasic.scripts.desktop_client.Arguments = '-f "${docbase.tools.install}\desktop_client\desktop_client.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.desktop_client.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.disable_fulltext_jobs = createObj
@@ -866,23 +866,23 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.dfc.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.dfc_javadbexpr = createObj
- $docbase.upgrade.dmbasic.scripts.dfc_javadbexpr.Arguments = '-f "${docbase.tools.dmscripts}\dfc_javadbexpr.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.dfc_javadbexpr.Arguments = '-f "${docbase.tools.dmscripts}\dfc_javadbexpr.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.dfc_javadbexpr.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.dm_bpmmodules_install = createObj
- $docbase.upgrade.dmbasic.scripts.dm_bpmmodules_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_bpmodules_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}\lib" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_bpmmodules_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_bpmmodules_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}\lib" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_bpmmodules_install.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.createMethodServerObject = createObj
- $docbase.upgrade.dmbasic.scripts.createMethodServerObject.Arguments = '-f "${docbase.tools.dmscripts}\createMethodServerObject.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.createMethodServerObject.Arguments = '-f "${docbase.tools.dmscripts}\createMethodServerObject.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.createMethodServerObject.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.csec_plugin_upgrade_53 = createObj
- $docbase.upgrade.dmbasic.scripts.csec_plugin_upgrade_53.Arguments  = '-f "${docbase.tools.dmscripts}\csec_plugin_upgrade_53.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" -e Install'
+ $docbase.upgrade.dmbasic.scripts.csec_plugin_upgrade_53.Arguments  = '-f "${docbase.tools.dmscripts}\csec_plugin_upgrade_53.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.DM_HOME}" "Windows" -e Install'
  $docbase.upgrade.dmbasic.scripts.csec_plugin_upgrade_53.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.toolset = createObj
- $docbase.upgrade.dmbasic.scripts.toolset.Arguments = '-f "${docbase.tools.dmscripts}\toolset.ebs" -P "${docbase.name}.${docbase.config}" "{docbase.tools.dmscripts}" "${docbase.config}" -e ToolSet'
+ $docbase.upgrade.dmbasic.scripts.toolset.Arguments = '-f "${docbase.tools.dmscripts}\toolset.ebs" -P "${docbase.name}.${docbase.config}" "${docbase.tools.dmscripts}" "${docbase.config}" -e ToolSetup'
  $docbase.upgrade.dmbasic.scripts.toolset.ExitCode = 0
  
  $docbase.upgrade.dmbasic.scripts.dm_bpm_install = createObj
@@ -898,31 +898,86 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.create_fulltext_objects.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_ldap_install = createObj
- $docbase.upgrade.dmbasic.scripts.dm_ldap_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_ldap_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_ldap_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_ldap_install.ebs" -P "${docbase.name}" "${docbase.tools.bin}" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_ldap_install.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_storageservices_install = createObj
- $docbase.upgrade.dmbasic.scripts.dm_storageservices_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_storageservices_install.ebs -P "${docbase.name}" "${docbase.tools.bin}" "F" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_storageservices_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_storageservices_install.ebs" -P "${docbase.name}" "${docbase.tools.bin}" "F" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_storageservices_install.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install = createObj
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_emailTemplate_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install.ExitCode = 0
 
+ # -f F:\Documentum\product\7.1\install\admin\dm_xml_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e install 
+ $docbase.upgrade.dmbasic.scripts.dm_xml_install = createObj
+ $docbase.upgrade.dmbasic.scripts.dm_xml_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_xml_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e install'
+ $docbase.upgrade.dmbasic.scripts.dm_xml_install.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\bin\dm_gwm_install.ebs  -P RCSEHS.RCSEHS DM_IO_SVC_TST "F:\Documentum\product\7.1\bin" -e Install 
+ $docbase.upgrade.dmbasic.scripts.dm_gwm_install = createObj
+ $docbase.upgrade.dmbasic.scripts.dm_gwm_install.Arguments = '-f "${docbase.tools.bin}\dm_gwm_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ${docbase.tools.bin} -e install'
+ $docbase.upgrade.dmbasic.scripts.dm_gwm_install.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\tools\upgrade_java_methods_51.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e UpgradeMethods 
+ $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51 = createObj
+ $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51.Arguments = '-f "${docbase.tools.tools}\upgrade_java_methods_51.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e UpgradeMethods'
+ $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\tools\ci_schema_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
+ $docbase.upgrade.dmbasic.scripts.ci_schema_install = createObj
+ $docbase.upgrade.dmbasic.scripts.ci_schema_install.Arguments = '-f "${docbase.tools.tools}\ci_schema_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
+ $docbase.upgrade.dmbasic.scripts.ci_schema_install.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\tools\display_config_setup.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
+ $docbase.upgrade.dmbasic.scripts.display_config_setup = createObj
+ $docbase.upgrade.dmbasic.scripts.display_config_setup.Arguments = '-f "${docbase.tools.tools}\display_config_setup.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
+ $docbase.upgrade.dmbasic.scripts.display_config_setup.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\tools\offline_config_setup.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
+ $docbase.upgrade.dmbasic.scripts.offline_config_setup = createObj
+ $docbase.upgrade.dmbasic.scripts.offline_config_setup.Arguments = '-f "${docbase.tools.tools}\offline_config_setup.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
+ $docbase.upgrade.dmbasic.scripts.offline_config_setup.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\admin\dm_archiveserver_upgrade.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e entry_point
+ $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade = createObj
+ $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade.Arguments = '-f "${docbase.tools.dmscripts}\dm_archiveserver_upgrade.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e entry_point'
+ $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\admin\upgrade_contentreplication_job.ebs -e install -- RCSEHS.RCSEHS DM_IO_SVC_TST "" 
+ $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job = createObj
+ $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job.Arguments = '-f "${docbase.tools.dmscripts}\upgrade_contentreplication_job.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e install'
+ $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\admin\dm_acs_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" SOLVAYCS01ACS1 RCSEHS 9080 "http" T C:\bocs_objects.txt "solvaycs01" -e Install
+ $docbase.upgrade.dmbasic.scripts.dm_acs_install = createObj
+ $docbase.upgrade.dmbasic.scripts.dm_acs_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_acs_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" ${docbase.name}ACS1 ${docbase.config} ${docbase.jms.port} "http" T "C:\bocs_objects.txt" ${docbase.jms.host} -e install'
+ $docbase.upgrade.dmbasic.scripts.dm_acs_install.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\install\admin\dm_krb_util_config.ebs -e Install -- RCSEHS.RCSEHS DM_IO_SVC_TST "" 
+ $docbase.upgrade.dmbasic.scripts.dm_krb_util_config = createObj
+ $docbase.upgrade.dmbasic.scripts.dm_krb_util_config.Arguments = '-f "${docbase.tools.dmscripts}\dm_krb_util_config.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
+ $docbase.upgrade.dmbasic.scripts.dm_krb_util_config.ExitCode = 0
+
+ # -f F:\Documentum\product\7.1\bin\dd_populate.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" "F:\Documentum\dba\config\RCSEHS\data_dictionary.ini" -e Entry_Point 
+ $docbase.upgrade.dmbasic.scripts.dd_populate = createObj
+ $docbase.upgrade.dmbasic.scripts.dd_populate.Arguments = '-f "${docbase.tools.bin}\dd_populate.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${file.data_dictionary_ini}" -e Entry_Point'
+ $docbase.upgrade.dmbasic.scripts.dd_populate.ExitCode = 0
+
  $docbase.upgrade.dmbasic.scripts.dm_defaultevent_set = createObj
- $docbase.upgrade.dmbasic.scripts.dm_defaultevent_set.Arguments = '-e Install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.dm_defaultevent_set.Arguments = '-f "${docbase.tools.dmscripts}\dm_defaultevent_set.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_defaultevent_set.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_jms_config_setup = createObj
- $docbase.upgrade.dmbasic.scripts.dm_jms_config_setup.Arguments = '-e install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.COMPUTERNAME}" ${docbase.jms.port}'
+ $docbase.upgrade.dmbasic.scripts.dm_jms_config_setup.Arguments = '-f "${docbase.tools.dmscripts}\dm_jms_config_setup.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${env.COMPUTERNAME}" ${docbase.jms.port} -e install '
  $docbase.upgrade.dmbasic.scripts.dm_jms_config_setup.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.dm_gr_config = createObj
- $docbase.upgrade.dmbasic.scripts.dm_gr_config.Arguments = '-e Install -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.dm_gr_config.Arguments = '-f "${docbase.tools.dmscripts}\dm_gr_config.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_gr_config.ExitCode = 0
 
  $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall = createObj
- $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall.Arguments = '-e EntryPoint -- "${docbase.name}.${docbase.config}" ${env.USERNAME} ""'
+ $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall.Arguments = '-f "${docbase.tools.dmscripts}\javaAdminMethodInstall.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall.ExitCode = 0
 
 
@@ -1052,6 +1107,7 @@ function Initialize ($path)
  $file.config_folder = $path
  $file.server_ini = $path + '\server.ini'
  $file.dbpasswd_txt = $path + '\dbpasswd.txt'
+ $file.data_dictionary_ini = $path + '\data_dictionary.ini' # TODO check path
  $file.migrate = $path + '\migrate.properties'
  $file.services = '${env.WINDIR}\System32\Drivers\etc\services'
 
@@ -1375,7 +1431,7 @@ function checkScriptConf($obj, $step)
     foreach ($script in $scripts)
     {
         $script = $script.Trim()
-        if ($null -eq $cfg.$docbase.upgrade.dmbasic.scripts.($script))
+        if ($null -eq $obj.docbase.upgrade.dmbasic.scripts.($script))
         {
             throw "cannot find configuration object for dmscript entry '$script'"
         }

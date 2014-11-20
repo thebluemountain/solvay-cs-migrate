@@ -14,6 +14,7 @@ function BuildDars ($conf, $name)
    # dar names are located in: conf.resolve('docbase.dars.sets.' + $this.name)
    # as a comma-separated collection of dar name
    $all = $this.conf.resolve('docbase.upgrade.dars.sets.' + $this.name)
+   
    foreach ($name in $all.Split(','))
    {
     $dar = $this.conf.resolve('docbase.upgrade.dars.' + $name)
@@ -68,12 +69,12 @@ function BuildDars ($conf, $name)
     # 1st the program
     $program = $this.conf.resolve('env.JAVA_HOME') + '\bin\java.exe'
 
-    $dilog = $this.conf.resolve('docbase.daemon.dir') + '\dars_status.log'
+    $dilog = $this.conf.resolve('docbase.daemon.dir') + '\dars_status.out'
 
     $params = [System.Collections.ArrayList]@()
     $params.Add('-Dant_extended_lib_dir=' + $this.conf.resolve('docbase.tools.composer.dir')) | Out-Null
     $params.Add('-Ddars=' + $files) | Out-Null
-    $params.Add('-Dlogpath=' + $this.conf.resolve('docbase.daemon.dir') + '\dars.log') | Out-Null
+    $params.Add('-Dlogpath=' + $this.conf.resolve('docbase.daemon.dir') + '\dars.out') | Out-Null
     $params.Add('-Ddi_log="' + $dilog + '"') | Out-Null
     $params.Add('-Ddocbase=' + $this.conf.resolve('docbase.name') + '.' + $this.conf.resolve('docbase.config')) | Out-Null
     $params.Add('-Duser=' + $this.conf.resolve('env.USERNAME')) | Out-Null
