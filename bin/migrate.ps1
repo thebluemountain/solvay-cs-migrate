@@ -43,7 +43,10 @@ function installHAServer ($cnx, $cfg)
     # updating the list of installed docbase
     Update-DocbaseList $cfg
 
-    # managing docbroker changes
+    # creating initialization files
+    Create-IniFiles($cfg)
+
+    # managing docbroker changes in the server.ini
     Update-Docbrokers $cfg
 
     # ------------------- Start Content Server service ------------------------------------
