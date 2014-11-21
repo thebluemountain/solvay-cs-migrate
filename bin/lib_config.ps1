@@ -757,7 +757,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.daemon = createObj
  $docbase.daemon.dir = '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}'
  $docbase.daemon.name = 'DmServer${ini.SERVER_STARTUP.docbase_name}'
- $docbase.daemon.display = 'Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
+ $docbase.daemon.display = 'Documentum Docbase Service ${ini.SERVER_STARTUP.docbase_name}'
  $docbase.daemon.ini = '${' + $db + '.daemon.dir}\server.ini'
  #$docbase.daemon.ini = 
  # '${' + $env + '.DOCUMENTUM}\dba\config\${' + $db + '.name}\server.ini'
@@ -1218,7 +1218,7 @@ function checkObj ($obj, $action)
  {
   throw 'leading or trailing spaces in value for docbase.service: ''' + $val + ''''
  }
- if (('installha' -eq $action) || ('install' -eq $action))
+ if (('installha' -eq $action) -or ('install' -eq $action))
  {
   if ('install' -eq $action)
   {
