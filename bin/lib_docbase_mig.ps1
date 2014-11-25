@@ -70,7 +70,6 @@ function New-DocbaseService($obj)
     Log-Info "Docbase service $($obj.name) successfully created."
 }
 
-
 <#
     Creates initialization files 
 #> 
@@ -105,7 +104,6 @@ function Create-IniFiles($cfg)
     Log-Info ("initialization files successfully created in $inipath")
 }
 
-
 <#
     Updates service files
 #>
@@ -133,7 +131,7 @@ function Update-DocbaseList($cfg)
     {
         throw "$dm_dctm_cfg does not exists"
     }
-    $section = "DOCBASE_$($cfg.resolve('docbase.name'))"
+    $section = 'DOCBASE_' + $cfg.resolve('docbase.name')
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "NAME", $cfg.resolve('docbase.name'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.previous.version'))
     [iniFile]::WriteValue($dm_dctm_cfg,  $section, "DATABASE_CONN", $cfg.resolve('docbase.dsn'))
@@ -158,7 +156,6 @@ function Test-DocbaseService($name)
     return $true
 }
 
-
 <#
     Returns the max port number used in the \etc\services file.
 #>
@@ -177,7 +174,6 @@ function Get-MaxTcpPort($Path)
     return $maxTcpPort
 }
 
-
 <#
     An enumeration that represents the state of install owner changes
 #>
@@ -193,7 +189,6 @@ Add-Type -TypeDefinition @"
 
 <#
     Tests if install owner has changed
-
 #>
 function Test-InstallOwnerChanged($cnx, $cfg)
 {
@@ -341,6 +336,9 @@ function Update-Docbrokers($cfg)
     Log-Info 'Updated docbrokers'
 }
 
+<# 
+    Checks wether the migration of location has been done already or not
+#>
 function Test-LocationMigrated($cnx)
 {
     $r = Execute-Scalar -cnx $cnx -sql 'SELECT COUNT(*) FROM dbo.mig_locations'
@@ -449,6 +447,9 @@ function Disable-Jobs($cnx, $cfg)
     Log-Info "Jobs successfully disabled"
 }
 
+<#
+    Updates the target server for jobs
+#>
 function Update-JobsTargetServer($cnx, $cfg)
 {
     $result = Select-Table -cnx $cnx -sql "SELECT target_server, r_object_id FROM dm_job_s"
@@ -478,7 +479,7 @@ function Update-JobsTargetServer($cnx, $cfg)
 }
 
 <#
-    Update mount points
+    Updates mount points with the new host name
 #>
 function Update-MountPoint($cnx, $cfg)
 {
@@ -493,7 +494,9 @@ function Update-MountPoint($cnx, $cfg)
     Log-Info "Mount points successfully fixed"
 }
 
-
+<#
+    Updates specific locations (convert, nls_chartrans) with new dm_home path.
+#>
 function Update-DmLocations($cnx, $cfg)
 {
     $sql = "
@@ -509,6 +512,9 @@ function Update-DmLocations($cnx, $cfg)
     Log-Info "Dm locations successfully fixed"
 }
 
+<#
+    Updates the server config with the new host name
+#>
 function Update-ServerConfig($cnx, $cfg)
 {
     $sql =
@@ -524,6 +530,9 @@ function Update-ServerConfig($cnx, $cfg)
     Log-Info "Server config successfully fixed"
 }
 
+<#
+    Updates the server config app server uri
+#>
 function Update-AppServerURI($cnx, $cfg)
 {
     $sql =
@@ -558,18 +567,6 @@ function Update-AppServerURI($cnx, $cfg)
     Log-Info "app_server_uri updated successfully"
 }
 
-function Test-TableExists ($cnx, $name)
-{
- $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
-  'WHERE t.name = ''' + $name + ''' AND t.type = ''U'' AND t.schema_id = s.schema_id AND s.name = ''dbo'''
- $r = Execute-Scalar -cnx $cnx -sql $sql
- if ($r)
- {
-  return $true
- }
- return $false
-}
-
 <#
  the method that checks that datamodel is currently marked as a 
  7.1 docbase.
@@ -594,24 +591,14 @@ function Test-Running71 ($cnx, $conf)
  }
 }
 
+<#
+    Tests wether the temporary migration tables are already present in the db.
+#>
 function Test-MigrationTables($cnx, $cfg)
 {
  $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
   'WHERE t.name IN (''mig_active_jobs'', ''mig_user'', ''mig_indexes'') AND ' + 
    't.type = ''U'' AND t.schema_id = s.schema_id AND s.name = ''dbo'''
-<#
-    $catName = $cfg.resolve('docbase.database')
-    $sql = "IF (EXISTS (SELECT *
-             FROM INFORMATION_SCHEMA.TABLES
-             WHERE TABLE_SCHEMA = 'dbo'
-             AND  (
-                TABLE_NAME = 'mig_active_jobs'
-                OR TABLE_NAME = 'mig_user'
-                OR TABLE_NAME = 'mig_indexes'
-               )
-               AND TABLE_CATALOG = '$catName'))
-            SELECT 1 AS res ELSE SELECT 0 AS res;"
-#>
     $r = Execute-Scalar -cnx $cnx -sql $sql
     if ($r)
     {
@@ -621,6 +608,9 @@ function Test-MigrationTables($cnx, $cfg)
     return $false
 }
 
+<#
+    Drops temporary migration tables.
+#>
 function Remove-MigrationTables($cnx)
 {
     if (Test-TableExists -cnx $cnx -name 'mig_user')
@@ -651,6 +641,9 @@ function Remove-MigrationTables($cnx)
     Log-Info "Migration tables deleted"
 }
 
+<#
+    Creates temporary migration table for storing custom indexes.
+#>
 function Create-mig_indexesTable()
 {
     $sql =
@@ -665,7 +658,9 @@ function Create-mig_indexesTable()
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
 }
 
-
+<#
+    Stores the custom indexes definition in temp table and drop the indexes from dm tables
+#>
 function Save-CustomIndexes($cnx, $cfg)
 {
     $dbname = $cnx.database
@@ -746,6 +741,9 @@ function Save-CustomIndexes($cnx, $cfg)
     }
 }
 
+<#
+    Restores the custom indexes saved in temp table to dm tables 
+#>
 function Restore-CustomIndexes($cnx, $cfg)
 {
     if (Test-TableExists -cnx $cnx -name 'mig_indexes')
@@ -796,6 +794,9 @@ function Restore-CustomIndexes($cnx, $cfg)
     }
 }
 
+<#
+    Reactivates jobs status after migration
+#>
 function Restore-ActiveJobs($cnx)
 {
     if (Test-TableExists -cnx $cnx -name 'mig_active_jobs')
@@ -825,11 +826,14 @@ function Restore-ActiveJobs($cnx)
     }
 }
 
+<#
+   Make sure all contents are here
+   we are retrieving the latest content of each stuff
+#>
 function Check-Contents ($cnx, $obj)
 {
   $servermark = $obj.resolve('docbase.hexid')
-  # make sure all contents are here
-  # we are retrieving the latest content of each stuff
+  
 <#  $sql = 'SELECT f.r_object_id, l.file_system_path, c.data_ticket ' + 
    'FROM dbo.dm_filestore_s f, dbo.dm_location_sv l, ' + 
    '(SELECT storage_id, MAX(data_ticket) AS data_ticket FROM dmr_content_s GROUP BY storage_id) c ' + 
@@ -921,6 +925,9 @@ WHERE
   }
 }
 
+<#
+    Disables docbroker projections (set projection_enable to 0)
+#>
 function Disable-Projections ($cnx, $name)
 {
   $sql ="
@@ -1071,6 +1078,10 @@ function Read-Dynamic-Conf ($cnx, $conf)
     Log-Info ('fetched dynamic data from install owner user and current server configuration')
 }
 
+<# 
+    Starts the Content Server service.
+    Throws an exception if the service is already started.
+#>
 function Start-ContentServerService($Name)
 {
     $csService = Get-Service $Name -ErrorAction Stop
@@ -1083,6 +1094,10 @@ function Start-ContentServerService($Name)
     Log-Info "Content Server service '$Name' successfully started"
 }
 
+<# 
+    Starts the Content Server service.
+    Warns if the service is already started.
+#>
 function Start-ContentServerServiceIf($Name)
 {
     $csService = Get-Service $Name -ErrorAction Stop
@@ -1098,6 +1113,10 @@ function Start-ContentServerServiceIf($Name)
     }
 }
 
+<# 
+    Stops the Content Server service.
+    Warns if the service is already stopped.
+#>
 function Stop-ContentServerServiceIf($Name)
 {
     $csService = Get-Service $Name -ErrorAction SilentlyContinue
@@ -1116,6 +1135,10 @@ function Stop-ContentServerServiceIf($Name)
     }
 }
 
+<# 
+    Removes the Content Server service.
+    Warns if the service doesn't exists.
+#>
 function Remove-ContentServerServiceIf($name)
 {
     $csService = Get-Service $Name -ErrorAction SilentlyContinue
@@ -1138,6 +1161,9 @@ function Remove-ContentServerServiceIf($name)
 
 }
 
+<#
+    Executes the dm basic script and throws if an error in execution is detected.
+#>
 function Start-DmbasicScript($cfg, $scriptname)
 {
     Log-Info "Executing dmbasic script $script..."
@@ -1186,6 +1212,9 @@ function Start-DmbasicScript($cfg, $scriptname)
     }
 }
 
+<#
+    Runs a collection of dm basic scripts
+#>
 function Start-DmbasicStep($cfg, $step)
 {
     $all = $cfg.resolve('docbase.upgrade.dmbasic.steps.' + $step)
@@ -1199,6 +1228,9 @@ function Start-DmbasicStep($cfg, $step)
     }
 }
 
+<#
+    Updates the the ACS config with the new JMS and new Docbroker projections.
+#>
 function Update-AcsConfig($cnx, $cfg)
 {
     $docbase = $cfg.resolve('docbase.config') 
@@ -1240,12 +1272,15 @@ function Update-AcsConfig($cnx, $cfg)
     Log-Info "ACS Config updated successfully"
 }
 
+<#
+    Register a docbase to its JMS (adds an entry to the web.xml of webapp)
+#>
 function Register-DocbaseToJms($cfg)
 {    
     $name = $cfg.resolve('docbase.name')
     $jmsconf = New-JmsConf($cfg.resolve('docbase.jms.web_inf') + '\web.xml')
     $jmsconf.Register($name)
     $jmsconf.Save()
-
     log-info "Docbase successfully registered to JMS"
 }
+

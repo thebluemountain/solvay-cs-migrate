@@ -27,9 +27,8 @@ function installHAServer ($cnx, $cfg)
     # Update app_server_uri in server config
     Update-AppServerURI -cnx $cnx -cfg $cfg
 
-    # register the server onto its jms
-    # TODO: wait for frederic's update
-    #Update-JMSRegistration -conf $cfg
+    # Register Docbase to JMS
+    Register-DocbaseToJms -cfg $cfg 
 
     # configuring registry
     Write-DocbaseRegKey $cfg.ToDocbaseRegistry()
@@ -139,8 +138,7 @@ function installServer ($cnx, $cfg)
     Update-AcsConfig -cnx $cnx -cfg $cfg
 
     # Register Docbase to JMS
-    Register-DocbaseToJms -cfg $cfg
-    
+    Register-DocbaseToJms -cfg $cfg 
 }
 
 function upgradeServer ($cfg)
@@ -160,11 +158,10 @@ function upgradeServer ($cfg)
     # Execute dmbasic script after installing DARs
     Start-DmbasicStep -cfg $cfg -step 'after'
 
-    # TODO - change version number to 7.1.0.151 in dm_documentum_config.txt
-
-#[DOCBASE_RCSEHS]
-#....
-#VERSION=7.1.0.151
+    # Change version number to target version in dm_documentum_config.txt
+    $dm_dctm_cfg = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.txt'
+    $section = 'DOCBASE_' + $cfg.resolve('docbase.name')
+    [iniFile]::WriteValue($dm_dctm_cfg,  $section, "VERSION", $cfg.resolve('docbase.target.version'))
 }
 
 function restoreServer ($cnx)
@@ -219,7 +216,20 @@ function uninstallServer ($cfg)
     {
         remove-item $init -recurse  | Out-Null
         log-info "removed directory $init"
-    }
+    }    
+
+    # remove docbase section from dm_documentum_config.txt
+    $dm_dctm_cfg = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.txt'   
+    $section = "DOCBASE_$docbasename"
+    [IniFile]::DeleteSection($dm_dctm_cfg, $section)
+    Log-Info("Removed section $section from $dm_dctm_cfg")
+
+    # unregister docbase from JMS
+    $path =  $cfg.resolve('docbase.jms.web_inf') + '\web.xml'
+    $jmsconf = New-JmsConf($cfg.resolve('docbase.jms.web_inf') + '\web.xml')
+    $jmsconf.Unregister($docbasename)
+    $jmsconf.Save()
+    log-info "Docbase successfully unregistered from JMS"
 
     # Unregister docbase from docbrokers
     $docbrokers = $cfg.docbase.docbrokers
@@ -235,8 +245,7 @@ function uninstallServer ($cfg)
         catch 
         {
             Log-Warning "Failed to unregister docbase $docbasename from Docbroker $i host= $hostname port= $port - $($_.Exception.Message)"
-        }
-        
+        }        
     }
 
     log-info "done uninstalling server $docbasename"
@@ -287,8 +296,8 @@ try
     # Include dars functions
     . "$PSScriptRoot\lib_dars.ps1"
   
-    $startDate = Get-Date  -Verbose
-    Log-Info "*** Content Server upgrade migration operations started on $startDate ***"
+    $startTime = Get-Date  -Verbose
+    Log-Info "*** Content Server upgrade migration operations started on $startTime ***"
 
     # --------------------------- Validate environment ------------------------------------------
 
@@ -354,7 +363,8 @@ try
             usage
             throw "unexpected action to perform: '$action'"
         }
-        log-info ('done with migrate program')
+        $endTime = Get-Date  -Verbose
+        log-info ("Done with migrate program on $endTime")
     }
     finally
     {

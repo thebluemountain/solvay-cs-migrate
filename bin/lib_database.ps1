@@ -73,3 +73,18 @@ function Execute-Scalar ($cnx, $sql)
     Log-Verbose "Result = $result"
     return $result  
 }
+
+<#
+    Checks wether or not a table exists in the current schemas
+#>
+function Test-TableExists ($cnx, $name)
+{
+    $sql = 'SELECT t.name FROM sys.tables t, sys.schemas s ' + 
+        'WHERE t.name = ''' + $name + ''' AND t.type = ''U'' AND t.schema_id = s.schema_id AND s.name = ''dbo'''
+    $r = Execute-Scalar -cnx $cnx -sql $sql
+    if ($r)
+    {
+        return $true
+    }
+    return $false
+}

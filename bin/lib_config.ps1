@@ -793,6 +793,9 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.previous.jms = createObj
  $docbase.previous.jms.host = '${' + $db + '.previous.host}'
  $docbase.previous.jms.port = 9080
+ 
+ $docbase.target = createObj
+ $docbase.target.version = '7.1.0.151'
 
  # regarding the tools: we've got some for docbasic, composer & dars
  $docbase.tools = createObj
@@ -909,57 +912,46 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_emailTemplate_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_emailTemplate_install.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\admin\dm_xml_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e install 
  $docbase.upgrade.dmbasic.scripts.dm_xml_install = createObj
  $docbase.upgrade.dmbasic.scripts.dm_xml_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_xml_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e install'
  $docbase.upgrade.dmbasic.scripts.dm_xml_install.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\bin\dm_gwm_install.ebs  -P RCSEHS.RCSEHS DM_IO_SVC_TST "F:\Documentum\product\7.1\bin" -e Install 
  $docbase.upgrade.dmbasic.scripts.dm_gwm_install = createObj
  $docbase.upgrade.dmbasic.scripts.dm_gwm_install.Arguments = '-f "${docbase.tools.bin}\dm_gwm_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} ${docbase.tools.bin} -e install'
  $docbase.upgrade.dmbasic.scripts.dm_gwm_install.ExitCode = 0
-
- # -f F:\Documentum\product\7.1\install\tools\upgrade_java_methods_51.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e UpgradeMethods 
+ 
  $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51 = createObj
  $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51.Arguments = '-f "${docbase.tools.tools}\upgrade_java_methods_51.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e UpgradeMethods'
  $docbase.upgrade.dmbasic.scripts.upgrade_java_methods_51.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\tools\ci_schema_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
  $docbase.upgrade.dmbasic.scripts.ci_schema_install = createObj
  $docbase.upgrade.dmbasic.scripts.ci_schema_install.Arguments = '-f "${docbase.tools.tools}\ci_schema_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.ci_schema_install.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\tools\display_config_setup.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
  $docbase.upgrade.dmbasic.scripts.display_config_setup = createObj
  $docbase.upgrade.dmbasic.scripts.display_config_setup.Arguments = '-f "${docbase.tools.tools}\display_config_setup.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.display_config_setup.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\tools\offline_config_setup.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e EntryPoint 
  $docbase.upgrade.dmbasic.scripts.offline_config_setup = createObj
  $docbase.upgrade.dmbasic.scripts.offline_config_setup.Arguments = '-f "${docbase.tools.tools}\offline_config_setup.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.offline_config_setup.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\admin\dm_archiveserver_upgrade.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" -e entry_point
  $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade = createObj
  $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade.Arguments = '-f "${docbase.tools.dmscripts}\dm_archiveserver_upgrade.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e entry_point'
  $docbase.upgrade.dmbasic.scripts.dm_archiveserver_upgrade.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\admin\upgrade_contentreplication_job.ebs -e install -- RCSEHS.RCSEHS DM_IO_SVC_TST "" 
  $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job = createObj
  $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job.Arguments = '-f "${docbase.tools.dmscripts}\upgrade_contentreplication_job.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e install'
  $docbase.upgrade.dmbasic.scripts.upgrade_contentreplication_job.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\admin\dm_acs_install.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" SOLVAYCS01ACS1 RCSEHS 9080 "http" T C:\bocs_objects.txt "solvaycs01" -e Install
  $docbase.upgrade.dmbasic.scripts.dm_acs_install = createObj
  $docbase.upgrade.dmbasic.scripts.dm_acs_install.Arguments = '-f "${docbase.tools.dmscripts}\dm_acs_install.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" ${docbase.name}ACS1 ${docbase.config} ${docbase.jms.port} "http" T "C:\bocs_objects.txt" ${docbase.jms.host} -e install'
  $docbase.upgrade.dmbasic.scripts.dm_acs_install.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\install\admin\dm_krb_util_config.ebs -e Install -- RCSEHS.RCSEHS DM_IO_SVC_TST "" 
  $docbase.upgrade.dmbasic.scripts.dm_krb_util_config = createObj
  $docbase.upgrade.dmbasic.scripts.dm_krb_util_config.Arguments = '-f "${docbase.tools.dmscripts}\dm_krb_util_config.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e Install'
  $docbase.upgrade.dmbasic.scripts.dm_krb_util_config.ExitCode = 0
 
- # -f F:\Documentum\product\7.1\bin\dd_populate.ebs -P RCSEHS.RCSEHS DM_IO_SVC_TST "" "F:\Documentum\dba\config\RCSEHS\data_dictionary.ini" -e Entry_Point 
  $docbase.upgrade.dmbasic.scripts.dd_populate = createObj
  $docbase.upgrade.dmbasic.scripts.dd_populate.Arguments = '-f "${docbase.tools.bin}\dd_populate.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" "${file.data_dictionary_ini}" -e Entry_Point'
  $docbase.upgrade.dmbasic.scripts.dd_populate.ExitCode = 0
@@ -979,7 +971,6 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall = createObj
  $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall.Arguments = '-f "${docbase.tools.dmscripts}\javaAdminMethodInstall.ebs" -P "${docbase.name}.${docbase.config}" ${env.USERNAME} "" -e EntryPoint'
  $docbase.upgrade.dmbasic.scripts.javaAdminMethodInstall.ExitCode = 0
-
 
  # the dars to run
  $docbase.upgrade.dars = createObj
@@ -1523,25 +1514,35 @@ function asDbConnectionString($obj)
  return $cnxstring
 }
 
-
-$iniClassSrc = "
-    public class IniFile
+<#
+  A C# class that contains static methods wrapping around Win32 API to manipulate INI files.
+#>
+$iniClassSrc = 
+   'public class IniFile
     {
-        [System.Runtime.InteropServices.DllImport(""kernel32"")]
+        [System.Runtime.InteropServices.DllImport("kernel32")]
         private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
-        [System.Runtime.InteropServices.DllImport(""kernel32"")]
+        [System.Runtime.InteropServices.DllImport("kernel32")]
         private static extern int GetPrivateProfileString(string section, string key, string def, System.Text.StringBuilder retVal, int size, string filePath);
-        public static void WriteValue(string path, string Section, string Key, string Value)
+        public static void WriteValue(string path, string section, string key, string value)
         {
-            WritePrivateProfileString(Section, Key, Value, path);
+            WritePrivateProfileString(section, key, value, path);
         }
-        public static string ReadValue(string path, string Section, string Key)
+        public static string ReadValue(string path, string section, string key)
         {
             System.Text.StringBuilder temp = new System.Text.StringBuilder(255);
-            int i = GetPrivateProfileString(Section, Key, """", temp, 255, path);
+            int i = GetPrivateProfileString(section, key, "",  temp, 255, path);
             return temp.ToString();
         }
-    }"
+        public static void DeleteEntry(string path, string section, string key)
+        {
+             WritePrivateProfileString(section, key, null, path);
+        }
+        public static void DeleteSection(string path, string section)
+        {
+             WritePrivateProfileString(section, null, null, path);
+        }
+    }'
 Add-Type -TypeDefinition $iniClassSrc | Out-Null
 
 
@@ -1559,7 +1560,6 @@ function Log-Error($msg)
 {
  Write-Error ('' + $msg)
 }
-
 
 function Log-Verbose($msg)
 {

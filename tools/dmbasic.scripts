@@ -1,0 +1,236 @@
+%DM_HOME%\install\admin\headstart.ebs:
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+''                                   docbaseDescrption As String,_
+${env.DM_HOME}                       documentumHome As String, _
+-> the top-level path to the content location for the content_storage_01
+   issue SELECT file_system_path FROM dm_location_sv WHERE object_name = 'storage_01' 
+   the program checks that there is a location using: id,c,dm_location where file_system_path = '${dataHome}\${docbase.name}\content_storage_01'
+   TODO: a variable matching the grand-parent of the path for location 'storage_01' is to be used
+${docbase.datahome}                  dataHome As String, _
+${docbase.tools.dba}                 dbaHome As String, _
+${docbase.tools.install}             configureHome As String, _
+${docbase.tools.shared}              shareHome As String, _
+-> fulltext: will test a location with file_system_path matching ${env.DOCUMENTUM}\fulltext\$ftEngine
+${docbase.tools.fulltext}            fulltextHome As String, _
+${env.COMPUTER_NAME}                 hostName As String, _
+'Windows'                            osType As String, _
+'en'                                 localeLanguage As String, _
+${docbase.smtp_server_name}          smtpServerName As String, _ => comes from database dm_config_server_s !!!
+${docbase.email_address}             email As String, _          => comes from database dm_user_s for current user
+$(env.USERNAME)                      loginUsername As String, _  => used to locate the user: should rather use DQL keyword USER
+${docbase.connection_mode}           connectionMode As String, _
+${docbase.jms.port}                  tomcatPort As String, _
+''                                   verityLocale As String, _
+'TRUE'                               turnOffWFAgent As String, _
+'dsearch'                            ftEngine As String
+
+%DM_HOME%\install\admin\dm_apply_format.ebs
+Sub testmain(
+'noreport'                           report_name as String, _ 
+${docbase.name}.${docbase.config}    DB_NAME As String, _ 
+$(env.USERNAME)                      DB_USR As String, _ 
+''                                   DB_PW As String, _ 
+${docbase.tools.tools}\formats.csv   INPUT_FILE as String, _ 
+'trace'                              trace As String)
+
+%DM_HOME%\install\admin\dm_cas_install.ebs:
+function Entry_Point (
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+${env.DM_HOME}                       documentumHome As String, _
+'Windows'                            osType As String)
+
+%DM_HOME%\install\admin\csec_plugin.ebs:
+function install(
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+${env.DM_HOME}                       documentumHome As String, _
+'Windows'                            osType As String)
+
+%DM_HOME%\install\admin\dm_routerConv_install.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal sys_username As String, _ ' must have superuser priv.
+''                                   ByVal sys_password As String, _
+'NONE'                               ByVal target_user_cust_path As String) ' A path to a user's
+
+%DM_HOME%\install\admin\template.ebs:
+Function install(
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+${env.DM_HOME}                       documentumHome As String, _
+${docbase.tools.install}             installHome As String)
+
+
+%DM_HOME%\install\admin\replicate_bootstrap.ebs:
+Sub rmain(
+${docbase.name}.${docbase.config}    docbase as string, _
+${docbase.tools.bin}                 FilePath as string, _
+"FALSE"                              SANNASFlag as string)
+
+%DM_HOME%\install\admin\desktop_client.ebs:
+Sub EntryPoint(
+${docbase.name}.${docbase.config}    DocBaseName As String, _
+$(env.USERNAME)                      UserName As String, _
+''                                   Password As String, _
+${env.DM_HOME}                       DmHomePath As String)
+
+
+%DM_HOME%\install\admin\disable_fulltext_jobs.ebs
+function install(
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String)
+
+%DM_HOME%\install\admin\dfc.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal sys_username As String, _ ' must have superuser priv.
+''                                   ByVal sys_password As String)
+
+%DM_HOME%\install\admin\dfc_javadbexpr.ebs:
+Sub EntryPoint(
+${docbase.name}.${docbase.config}    docBaseName As String, _
+$(env.USERNAME)                      userName As String, _
+''                                   password As String)
+
+%DM_HOME%\install\admin\dm_bpmodules_install.ebs:
+Sub Install (
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal user As String, _
+''                                   ByVal password As String, _
+${env.DM_HOME}\lib                   ByVal jarFileLocation As String)  
+
+%DM_HOME%\install\admin\createMethodServerObject.ebs:
+Sub EntryPoint (
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      userName As String, _
+''                                   loginTicket As String)
+
+%DM_HOME%\install\admin\csec_plugin_upgrade_53.ebs:
+function install(
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+${env.DM_HOME}                       documentumHome As String, _     
+'Windows'                            osType As String)
+
+%DM_HOME%\install\admin\toolset.ebs:
+Sub ToolSetup(
+${docbase.name}.${docbase.config}    DocBase As String, _
+${docbase.tools.dmscripts}           FilePath As String, _
+${docbase.config}                    ServerName As String)
+
+%DM_HOME%\install\admin\dm_bpm_install.ebs:
+Sub Install (
+${docbase.name}.${docbase.config}    DocbaseName As String, _
+$(env.USERNAME)                      UserName As String, _
+''                                   Password As String)
+
+%DM_HOME%\install\admin\dm_wfTime_upgrade.ebs:
+Sub Install (
+${docbase.name}.${docbase.config}    DocbaseName As String, _
+$(env.USERNAME)                      UserName As String, _
+''                                   Password As String)
+
+%DM_HOME%\install\admin\create_fulltext_objects.ebs:
+function install(
+${docbase.name}.${docbase.config}    docbaseName As String, _
+$(env.USERNAME)                      docbaseUserName As String, _
+''                                   docbaseUserPassword As String, _
+'dsearch'                            ftEngine As String)
+
+%DM_HOME%\install\admin\dm_ldap_install.ebs:
+Sub Install(
+${docbase.name}                      DocBase As String, _
+${docbase.tools.bin}                 FilePath As String)
+
+%DM_HOME%\install\admin\dm_storageservices_install.ebs:
+Sub Install(
+${docbase.name}                      DocBase As String, _
+${docbase.tools.bin}                 FilePath As String, _
+'F'                                  SetStorageLicense as String)
+
+%DM_HOME%\install\admin\dm_emailTemplate_install.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal sys_username As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\install\admin\dm_xml_install.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\bin\dm_gwm_install.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal Owner As String, _ 
+${docbase.tools.bin}                 ByVal DmBinDir As String)
+
+%DM_HOME%\install\tools\upgrade_java_methods_51.ebs:
+Sub UpgradeMethods(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\install\tools\ci_schema_install.ebs:
+Sub EntryPoint(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\install\tools\display_config_setup.ebs:
+Sub EntryPoint(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\install\tools\offline_config_setup.ebs:
+Sub EntryPoint(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\install\admin\dm_archiveserver_upgrade.ebs:
+Sub entry_point(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+%DM_HOME%\install\admin\upgrade_contentreplication_job.ebs:
+Sub install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String)
+
+%DM_HOME%\7.1\install\admin\dm_acs_install.ebs:
+Sub Install(
+${docbase.name}.${docbase.config} 	 DocbaseName As String, _
+${env.USERNAME}                      UserName As String, _
+""                                   UserPassword As String, _
+${docbase.name}ACS1                  acs_name As String, _
+${docbase.config}                    server_config_name As String, _
+${docbase.jms.port}                  java_method_server_port As String, _
+"http"                               acs_protocol As String, _
+"T"                                  CleanupCacheAcsObject As String, _
+"C:\bocs_objects.txt"                CacheAcsDescriptionFile As String, _
+${docbase.jms.host}                  HostName As String)
+ 
+%DM_HOME%\install\admin\dm_krb_util_config.ebs:
+Sub Install(
+${docbase.name}.${docbase.config}    ByVal docbase As String, _
+$(env.USERNAME)                      ByVal UserName As String, _ 
+''                                   ByVal Password As String
+
+%DM_HOME%\bin\dd_populate.ebs:
+Function Entry_Point(
+${docbase.name}.${docbase.config}    ByVal DMT_DB As String, _
+ ${env.USERNAME}                     ByVal DMT_USR As String, _
+""                                   ByVal DMT_USP As String, _
+${file.data_dictionary_ini}          ByVal DD_INI_FILE As String) As Integer
