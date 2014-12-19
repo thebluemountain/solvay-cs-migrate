@@ -53,6 +53,22 @@ function installHAServer ($cnx, $cfg)
 }
 
 <#
+ the function that just ensure a server can be installed
+#>
+function checkServer ($cnx, $cfg)
+{
+    # --------------------- Performs pre-Content Server ugrade operations -----------------
+    # performs sanity checks against data held in database
+    $migCheck = Test-MigrationTables -cnx $cnx -cfg $cfg
+    if ($migCheck) 
+    {
+        throw 'Migration temporary tables already present'
+    }
+    # checks at the locations and the contents held
+    Check-Locations -cnx $cnx -cfg $cfg
+}
+
+<#
  the function that installs a new server instance
 #>
 function installServer ($cnx, $cfg)
@@ -64,6 +80,7 @@ function installServer ($cnx, $cfg)
     {
         throw 'Migration temporary tables already present'
     }
+    # checks at the locations and the contents held
     Check-Locations -cnx $cnx -cfg $cfg
 
     # managing the install owner name change
@@ -255,9 +272,11 @@ function usage ()
 {
     write-host 'migrate1.ps ${config.path} ${action}'
     write-host 'where:'
-    write-host ' ${config.path}: is the path containing the server.ini, the lapxxx.cnt, '
+    write-host ' ${config.path}: is the path containing the server.ini, the ldapxxx.cnt, '
     write-host '   the dbpasswd.txt and the migrate.properties file of use'
     write-host ' ${action} holds the action to perform. It either matches:'
+    write-host '   check: makes sure the migration tables, locations and related '
+    write-host '   contents are ok'
     write-host '   install: installs the content server and upgrades its version'
     write-host '   installha: installs another content server instance of an already ' 
     write-host '     upgraded docbase'
@@ -334,6 +353,10 @@ try
             installServer -cnx $cnx -cfg $cfg
             upgradeServer -cfg $cfg
             restoreServer -cnx $cnx
+        }
+        elseif ('check' -eq $action)
+        {
+            checkServer -cnx $cnx -cfg $cfg
         }
         elseif ('upgrade' -eq $action)
         {

@@ -889,7 +889,11 @@ WHERE
         $value = $data_ticket
       }
       $tmp = $value.ToString('x8')
-      $path = $tmp.Substring(0, 2) + '\' + $tmp.Substring(2, 2) + '\' + $tmp.Substring(4, 2) + '\' + $tmp.Substring(6, 2) + '.'
+      $p1 = $tmp.Substring(0, 2)
+      $p2 = $tmp.Substring(2, 2)
+      $p3 = $tmp.Substring(4, 2)
+      $p4 = $tmp.Substring(6, 2)
+      $path = $p1 + '\' + $p2 + '\' + $p3 + '\' + $p4 + '.'
       $ext = $row['dos_extension']
       if ($ext)
       {
@@ -906,11 +910,68 @@ WHERE
        $top = $obj.location.($store)
       }
       # OK, got the complete file name then
-      $filepath = $top + '\' + $servermark + '\' + $path
+      $base = $top + '\' + $servermark
+      $filepath = $base + '\' + $path
       if (-not (test-path $filepath))
       {
-       #$inerror = true
+       $inerror = true
        Log-Warning ('file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top)
+      }
+      else
+      {
+       Log-Info "checked file '$path' exists in store '$base': ensure it is the last one in the store"
+       # TODO: OK, we've got the last file of the store... 
+       # but is there other files after ?
+       # do it again in grand-parent
+       $search = $base + '\' + $p1
+       $file = (Get-LastFile $search)
+       if ($file)
+       {
+        if ($p2 -ne $file.BaseName)
+        {
+         Log-Warning("unexpected file '$file' in '$search'")
+         $inerror = $true
+        }
+        else
+        {
+         # do it again in parent path
+         $search = $base + '\' + $p1 + '\' + $p2
+         $file = (Get-LastFile $search)
+         if ($file)
+         {
+          if ($p3 -ne $file.BaseName)
+          {
+           Log-Warning("unexpected file '$file' in '$search'")
+           $inerror = $true
+          }
+          else
+          {
+           $search = $base + '\' + $p1 + '\' + $p2 + '\' + $p3
+           $file = (Get-LastFile $search)
+           if ($file)
+           {
+            if ($p4 -ne $file.BaseName)
+            {
+             Log-Warning("unexpected file '$file' in '$search'")
+             $inerror = $true
+            }
+           }
+           else
+           {
+            $inerror = $true
+           }
+          }
+         }
+         else
+         {
+          $inerror = $true
+         }
+        }
+       }
+       else
+       {
+        $inerror = $true
+       }
       }
     }
     if ($inerror)
@@ -923,6 +984,19 @@ WHERE
   {
     $results.Dispose()
   }
+}
+
+<#
+ The function that returns the last file eligible in a path of a store
+#>
+function Get-LastFile ($dir)
+{
+ $files = (get-childitem $dir | Where-Object {$_.Name -like '??.*' -or  $_.Name -like '??'} | sort)
+ if (0 -lt $files.Length)
+ {
+  return $files[$files.Length-1]
+ }
+ Log-Warning ("unexpected empty directory: '$dir'")
 }
 
 <#
