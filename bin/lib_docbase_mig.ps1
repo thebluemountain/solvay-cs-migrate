@@ -882,7 +882,7 @@ WHERE
       [System.UInt32]$value = 0;
       if (0 -gt $data_ticket)
       {
-        $value = [System.UInt32]::MaxValue + $data_ticket
+        $value = [System.UInt32]::MaxValue + $data_ticket + 1
       }
       else
       {
@@ -912,67 +912,66 @@ WHERE
       # OK, got the complete file name then
       $base = $top + '\' + $servermark
       $filepath = $base + '\' + $path
-      if (-not (test-path $filepath))
+      Log-Info "last file in store '$base' is '$path'"
+
+      # but is there other files after ?
+      # do it again in grand-parent
+      $search = $base + '\' + $p1
+      $file = (Get-LastFile $search)
+      if ($file)
       {
-       $inerror = true
-       Log-Warning ('file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top)
-      }
-      else
-      {
-       Log-Info "checked file '$path' exists in store '$base': ensure it is the last one in the store"
-       # TODO: OK, we've got the last file of the store... 
-       # but is there other files after ?
-       # do it again in grand-parent
-       $search = $base + '\' + $p1
-       $file = (Get-LastFile $search)
-       if ($file)
+       if ($p2 -ne $file.BaseName)
        {
-        if ($p2 -ne $file.BaseName)
-        {
-         Log-Warning("unexpected file '$file' in '$search'")
-         $inerror = $true
-        }
-        else
-        {
-         # do it again in parent path
-         $search = $base + '\' + $p1 + '\' + $p2
-         $file = (Get-LastFile $search)
-         if ($file)
-         {
-          if ($p3 -ne $file.BaseName)
-          {
-           Log-Warning("unexpected file '$file' in '$search'")
-           $inerror = $true
-          }
-          else
-          {
-           $search = $base + '\' + $p1 + '\' + $p2 + '\' + $p3
-           $file = (Get-LastFile $search)
-           if ($file)
-           {
-            if ($p4 -ne $file.BaseName)
-            {
-             Log-Warning("unexpected file '$file' in '$search'")
-             $inerror = $true
-            }
-           }
-           else
-           {
-            $inerror = $true
-           }
-          }
-         }
-         else
-         {
-          $inerror = $true
-         }
-        }
+        Log-Warning("unexpected directory '$file' in '$search': expected '$p2'")
+        $inerror = $true
        }
        else
        {
-        $inerror = $true
+        # do it again in parent path
+        $search = $base + '\' + $p1 + '\' + $p2
+        $file = (Get-LastFile $search)
+        if ($file)
+        {
+         if ($p3 -ne $file.BaseName)
+         {
+          Log-Warning("unexpected directory '$file' in '$search': expected '$p3'")
+          $inerror = $true
+         }
+         else
+         {
+          if (-not (test-path $filepath))
+          {
+           Log-Warning ('file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top)
+           $inerror = $true
+          }
+
+          $search = $base + '\' + $p1 + '\' + $p2 + '\' + $p3
+          $file = (Get-LastFile $search)
+          if ($file)
+          {
+           if ($p4 -ne $file.BaseName)
+           {
+            Log-Warning("unexpected file '$file' in '$search': expected '$p4'")
+            $inerror = $true
+           }
+          }
+          else
+          {
+           $inerror = $true
+          }
+         }
+        }
+        else
+        {
+         $inerror = $true
+        }
        }
       }
+      else
+      {
+       $inerror = $true
+      }
+
     }
     if ($inerror)
     {
