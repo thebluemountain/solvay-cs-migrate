@@ -944,31 +944,37 @@ WHERE
            Log-Warning ('file ' + $path + ' is missing in store ' + $store + ' located in directory ' + $top)
            $inerror = $true
           }
-
-          $search = $base + '\' + $p1 + '\' + $p2 + '\' + $p3
-          $file = (Get-LastFile $search)
-          if ($file)
-          {
-           if ($p4 -ne $file.BaseName)
-           {
-            Log-Warning("unexpected file '$file' in '$search': expected '$p4'")
-            $inerror = $true
-           }
-          }
           else
           {
-           $inerror = $true
+           $search = $base + '\' + $p1 + '\' + $p2 + '\' + $p3
+           $file = (Get-LastFile $search)
+           if ($file)
+           {
+            if ($p4 -ne $file.BaseName)
+            {
+             Log-Warning("unexpected file '$file' in '$search': expected '$p4'")
+             $inerror = $true
+            }
+            # the only case that is OK
+           }
+           else
+           {
+            Log-Warning("cannot find any file in '$search'")
+            $inerror = $true
+           }
           }
          }
         }
         else
         {
+         Log-Warning("cannot find any file in '$search'")
          $inerror = $true
         }
        }
       }
       else
       {
+       Log-Warning("cannot find any file in '$search'")
        $inerror = $true
       }
 
@@ -991,11 +997,18 @@ WHERE
 function Get-LastFile ($dir)
 {
  $files = (get-childitem $dir | Where-Object {$_.Name -like '??.*' -or  $_.Name -like '??'} | sort)
- if (0 -lt $files.Length)
+ if ($null -eq $files)
+ {
+  Log-Warning ("unexpected empty directory: '$dir'")
+ }
+ elseif ('FileInfo' -eq $files.GetType().Name)
+ {
+  return $files
+ }
+ elseif (0 -lt $files.Length)
  {
   return $files[$files.Length-1]
  }
- Log-Warning ("unexpected empty directory: '$dir'")
 }
 
 <#
