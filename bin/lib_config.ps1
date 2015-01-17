@@ -1093,12 +1093,16 @@ function Initialize ($path)
  {
   throw 'missing file migrate.properties in ' + $path
  }
+ if (-not(Test-Path ($path + '\data_dictionary.ini')))
+ {
+  throw 'missing file data_dictionary.ini in ' + $path
+ }
  # builds the file
  $file = createObj
  $file.config_folder = $path
  $file.server_ini = $path + '\server.ini'
  $file.dbpasswd_txt = $path + '\dbpasswd.txt'
- $file.data_dictionary_ini = $path + '\data_dictionary.ini' # TODO check path
+ $file.data_dictionary_ini = $path + '\data_dictionary.ini'
  $file.migrate = $path + '\migrate.properties'
  $file.services = '${env.WINDIR}\System32\Drivers\etc\services'
 
@@ -1243,6 +1247,15 @@ function checkObj ($obj, $action)
  #>
 function checkEnv ($obj, $action)
 {
+ if (! ($obj.env.Contains('JAVA_HOME')))
+ {
+  throw 'missing JAVA_HOME environment variable'
+ }
+ $java = $obj.resolve('env.JAVA_HOME') + '\bin\java.exe'
+ if (!(test-path $java))
+ {
+  throw "missing java program in $java"
+ }
  if (($action -ne 'install') -and ($action -ne 'upgrade') -and ($action -ne 'installha'))
  {
   # don't go any further
@@ -1362,7 +1375,8 @@ function checkEnv ($obj, $action)
 
 function checkDB ($obj, $action)
 {
- if (($action -ne 'install') -and ($action -ne 'installha') -and ($action -ne 'upgrade'))
+ if (($action -ne 'check') -and ($action -ne 'install') -and 
+  ($action -ne 'installha') -and ($action -ne 'upgrade'))
  {
   # don't go any further
   return $obj
@@ -1403,6 +1417,35 @@ function checkDB ($obj, $action)
      $obj.resolve('docbase.name') + ': expected ' + $obj.resolve('docbase.id')
    }
    Write-Host 'docbase config checked...'
+  }
+  # make sure the default security either match 'user' or 'folder' on the server config
+  $sql = 'SELECT r_object_id, default_acl FROM dm_server_config_sv ' + 
+    'WHERE i_has_folder = 1 AND object_name = ''' + $obj.resolve('docbase.config') +''''
+  $table = Select-Table $cnx $sql
+  if (0 -eq $table.rows.count)
+  {
+   throw 'cannot locate server config for docbase ' + 
+    $obj.resolve('docbase.config') + 
+    ': are we accessing it through the correct database dsn (' + 
+    $obj.resolve('docbase.dsn') + ')?'
+  }
+  elseif (1 -lt $table.rows.count)
+  {
+   throw 'too many (' + $table.rows.count + ') server configs named ' + 
+    $obj.resolve('docbase.config')
+  }
+  else
+  {
+   [System.Int32]$acl = $table.rows[0].default_acl
+   if ((1 -ne $acl) -and (3 -ne $acl))
+   {
+    throw 'unexpected default acl (' + $acl + ') found in database ' + 
+     'for server configuration ' + $obj.resolve('docbase.config') + 
+     ': expected 1 (folder) or 3 (user)'
+   }
+   # TODO: possibly type could be supported ... 
+   # provided the dm_sysobject has valid default acl
+   Write-Host 'server config checked...'
   }
  }
  finally

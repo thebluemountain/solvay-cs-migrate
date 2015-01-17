@@ -282,6 +282,7 @@ function usage ()
     write-host '     upgraded docbase'
     write-host '   upgrade: upgrades the matching docbase through the existing'
     write-host '     content server'
+    write-host '   restore: restore jobs states and indexes once docbase is upgraded'
     write-host '   uninstall: uninstall an existing content server instance'
     write-host '   dump: dumps the current configuration and the resolved equivalent'
     write-host '   help: displays this screen'
@@ -290,7 +291,7 @@ try
 {
     # Start transcription of the PS session to a log file.
     $logDate = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $LogFileLocation = "$ConfigPath\migration_log-$logDate.txt"
+    $LogFileLocation = "$ConfigPath\$logDate-$action-migration_log-.txt"
     try
     {
         Start-Transcript -path $LogFileLocation -append
@@ -361,6 +362,10 @@ try
         elseif ('upgrade' -eq $action)
         {
             upgradeServer -cfg $cfg
+        }
+        elseif ('restore' -eq $action)
+        {
+            restoreServer -cnx $cnx
         }
         elseif ('installha' -eq $action)
         {

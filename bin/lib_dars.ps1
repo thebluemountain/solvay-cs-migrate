@@ -14,16 +14,18 @@ function BuildDars ($conf, $name)
    # dar names are located in: conf.resolve('docbase.dars.sets.' + $this.name)
    # as a comma-separated collection of dar name
    $all = $this.conf.resolve('docbase.upgrade.dars.sets.' + $this.name)
-   
-   foreach ($name in $all.Split(','))
+   if (0 -lt $all.Length)
    {
-    $dar = $this.conf.resolve('docbase.upgrade.dars.' + $name)
-    $dar.name = $name
-    if ($null -eq $dar)
+    foreach ($name in $all.Split(','))
     {
-     throw 'dar config ''' + $this.name + ''' contains reference to unknown dar: ''' + $name + ''''
+     $dar = $this.conf.resolve('docbase.upgrade.dars.' + $name)
+     $dar.name = $name
+     if ($null -eq $dar)
+     {
+      throw 'dar config ''' + $this.name + ''' contains reference to unknown dar: ''' + $name + ''''
+     }
+     $dars.Add($dar) | Out-Null
     }
-    $dars.Add($dar) | Out-Null
    }
    return $dars
   }
