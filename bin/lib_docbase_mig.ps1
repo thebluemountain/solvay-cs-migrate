@@ -955,7 +955,11 @@ WHERE
              Log-Warning("unexpected file '$file' in '$search': expected '$p4'")
              $inerror = $true
             }
-            # the only case that is OK
+            else
+            {
+             # the only case that is OK
+             Log-Info("storage $store seems OK")
+            }
            }
            else
            {
@@ -983,7 +987,7 @@ WHERE
     {
      throw 'database refer to file(s) that cannot be resolved'
     }
-    Log-Info 'checked last content in docbase exists on file system'
+    Log-Info 'file system contents checked'
   }
   finally
   {

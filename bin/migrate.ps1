@@ -289,6 +289,12 @@ function usage ()
 }
 try
 {
+    if ('help' -eq $action)
+    {
+     usage
+     return
+    }
+
     # Start transcription of the PS session to a log file.
     $logDate = Get-Date -Format 'yyyyMMdd-HHmmss'
     $LogFileLocation = "$ConfigPath\$logDate-$action-migration_log-.txt"
@@ -381,10 +387,6 @@ try
             write $cfg.dump()
             write 'configuration (resolved):'
             write $cfg.show()
-        }
-        elseif ('help' -eq $action)
-        {
-            usage
         }
         else
         {
