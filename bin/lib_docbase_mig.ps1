@@ -161,7 +161,7 @@ function Test-DocbaseService($name)
 #>
 function Get-MaxTcpPort($Path)
 {
-    $regEx = '(?i)(?<svcname>[#\w\d]+)\s*(?<svcport>[0-9]+)\/tcp'
+<#    $regEx = '(?i)(?<svcname>[#\w\d]+)\s*(?<svcport>[0-9]+)\/tcp'
     $text = Get-Content $Path -Raw
     [Uint16]$maxTcpPort = 0
     foreach ($m in [regex]::Matches($text, $regEx))
@@ -171,7 +171,24 @@ function Get-MaxTcpPort($Path)
             $maxTcpPort = $m.Groups['svcport'].Value
         }
     }
-    return $maxTcpPort
+#>
+ $exp = [regex]'^[ \t]*([#\wd]+)+[ \t]+([0-9]+)/(tc|ud)p([ \t]+.*)?$'
+ [Uint16]$maxTcpPort = 0
+ $lines = Get-Content $Path
+ foreach ($line in $lines)
+ {
+  $match = $exp.Match($line)
+  if ($match.Success)
+  {
+   # service name is #1 and port is #2
+   if ((-not $match.Groups[1].Value.StartsWith('#')) -and 
+    ([uint16]::Parse($match.Groups[2].Value) -gt $maxTcpPort))
+   {
+    $maxTcpPort = [uint16]::Parse($match.Groups[2].Value)
+   }
+  }
+ }
+ return $maxTcpPort
 }
 
 <#
@@ -1009,6 +1026,10 @@ function Get-LastFile ($dir)
  {
   return $files
  }
+ elseif ('DirectoryInfo' -eq $files.GetType().Name)
+ {
+  return $files
+ }
  elseif (0 -lt $files.Length)
  {
   return $files[$files.Length-1]
@@ -1159,6 +1180,23 @@ function Read-Dynamic-Conf ($cnx, $conf)
         $result.Dispose()
     }
 
+    # figure whether docbase is a global registry
+    $result = Execute-Scalar -cnx $cnx -sql (
+     'SELECT r.docbase_roles ' + 
+     'FROM dbo.dm_docbase_config_r r ' + 
+     'JOIN dbo.dm_docbase_config_sv s ON (s.r_object_id = r.r_object_id) ' + 
+     'WHERE r.docbase_roles IS NOT NULL ' + 
+     'AND s.i_has_folder = 1 ' + 
+     'AND s.object_name = ''' + $conf.resolve('docbase.config') + '''')
+    if ($null -eq $result) 
+    {
+     $conf.docbase.globalregistry = $false    
+    }
+    else
+    {
+     $conf.docbase.globalregistry = $true    
+    }
+
     # computes the hexid for the docbase: 8 digits representation
     $id = $conf.resolve('docbase.id')
     [System.UInt32] $val = [Convert]::ToUInt32($id, 10)
@@ -1180,7 +1218,7 @@ function Start-ContentServerService($Name)
         throw 'Content server is not stopped.'
     }
     Log-Info "Starting Content Server service '$Name'. This may take a while..."
-    Start-Service $csService -ErrorAction Stop
+    Start-Service -InputObject $csService -ErrorAction Stop
     Log-Info "Content Server service '$Name' successfully started"
 }
 
@@ -1194,7 +1232,7 @@ function Start-ContentServerServiceIf($Name)
     if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running)
     {
         Log-Info "Starting Content Server service '$Name'. This may take a while..."
-        Start-Service $csService -ErrorAction Stop
+        Start-Service -InputObject $csService -ErrorAction Stop
         Log-Info "Content Server service '$Name' successfully started"
     }
     else
@@ -1215,7 +1253,7 @@ function Stop-ContentServerServiceIf($Name)
         if ($csService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped)
         {
             Log-Info "Stopping Content Server service '$Name'. This may take a while..."
-            Stop-Service $csService -ErrorAction Stop
+            Stop-Service -InputObject $csService -ErrorAction Stop
             Log-Info "Content Server service '$Name' successfully stopped"
         }
         else
