@@ -48,7 +48,9 @@ function _checkLikeDocbase ([string] $str)
  #>
 function New-JmsConf ($path)
 {
- $xml = [xml] (Get-Content ($path))
+ $xml = new-object xml
+ $xml.XmlResolver = $null
+ $xml.Load($path)
  $obj = @{}
  $obj.path = $path
  $obj.xml = $xml
