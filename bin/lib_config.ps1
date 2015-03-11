@@ -1307,9 +1307,20 @@ function checkEnv ($obj, $action)
  # make sure there is no line starting with ${cfg.docbase.service} in cfg.file.services
  # ... and make sure there is no line starting with ${cfg.docbase.service}_s in cfg.file.services
  # the first case is enough
- $pattern = '^' + $obj.resolve('docbase.service') + '(_s)?.*$'
+ $pattern = '^' + $obj.resolve('docbase.service') + '(_s)?[ \t]+[0-9]+/.*$'
  $val = select-string -pattern ($pattern) -path ($obj.resolve('file.services'))
- $count = $val.length
+ $count = 0
+ if ($null -ne $val)
+ {
+  if ('MatchInfo' -eq $val.GetType().Name)
+  {
+   $count = 1
+  }
+  elseif ('Object[]' -eq $val.GetType().Name)
+  {
+   $count = $val.length
+  }
+ }
  if ((($action -eq 'install') -or ($action -eq 'installha')) -and (0 -ne $count))
  {
   throw 'service ' + $obj.resolve('docbase.service') + 
