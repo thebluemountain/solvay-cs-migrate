@@ -1286,7 +1286,6 @@ function Remove-ContentServerServiceIf($name)
     {
         Log-Verbose "Service $name does not exist (may have been deleted aready)"
     }
-
 }
 
 <#
