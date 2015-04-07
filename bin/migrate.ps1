@@ -207,17 +207,13 @@ function uninstallServer ($cfg)
     if (test-path $services)
     {
         # '^myservice2(_s)?.*$'
-        $exp = '^' + $cfg.resolve('docbase.service') + '(_s)?.*$'
+        $exp = '^' + $cfg.resolve('docbase.service') + '(_s)?[ \t]+.*$'
         if (0 -lt ((type $services) -match $exp).length)
         {
             (type $services) -notmatch $exp | out-file -FilePath $services -Encoding 'ASCII'
             log-info "removed services entries for server $docbase.name"
         }
     }
-
-    # remove reference to the docbase in the documentum.txt
-    $txtfile = $cfg.resolve('env.documentum') + '\dba\dm_documentum_config.txt'
-    log-info "you should remove docbase section $docbasename' in txtfile"
 
     # remove registry entry
     $reg = 'HKLM:\Software\Documentum\DOCBASES\' + $docbasename
@@ -255,8 +251,9 @@ function uninstallServer ($cfg)
         $hostname = $cfg.resolve('docbase.docbrokers.' + $i + '.host')
         $port = $cfg.resolve('docbase.docbrokers.' + $i + '.port')
         try 
-        {             
-            Start-Process -FilePath '"F:\Documentum\product\7.1\bin\dmqdocbroker.bat"' -ArgumentList "-t $hostname -p $port -c deregister $docbasename" -NoNewWindow -Wait -ErrorAction stop
+        {
+            $broker = $cfg.resolve('env.DM_HOME') + '\bin\dmqdocbroker.bat'
+            Start-Process -FilePath "$broker" -ArgumentList "-t $hostname -p $port -c deregister $docbasename" -NoNewWindow -Wait -ErrorAction stop
             Log-Verbose "Unregistered docbase $docbasename from Docbroker $i host= $hostname port= $port"
         }
         catch 
@@ -297,7 +294,7 @@ try
 
     # Start transcription of the PS session to a log file.
     $logDate = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $LogFileLocation = "$ConfigPath\$logDate-$action-migration_log-.txt"
+    $LogFileLocation = "$ConfigPath\$logDate-$action-migration_log.txt"
     try
     {
         Start-Transcript -path $LogFileLocation -append
