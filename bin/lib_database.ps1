@@ -27,18 +27,27 @@ function New-Connection ($cnxString)
 function Select-Table ([System.Data.Odbc.OdbcConnection]$cnx, $sql)
 {
     Log-Verbose "Select-Table - SQL Statement: $sql"
-    $da = new-object System.Data.Odbc.OdbcDataAdapter $sql,$cnx
+    $cmd = new-object System.Data.Odbc.OdbcCommand $sql,$cnx
     try
     {
-        $table = new-object System.Data.DataTable
-        $da.Fill($table) | out-null
-        # be carefull: it's considered as a collection ...
-        # therefore returned as an array if not empty
-        return ,$table
+     $cmd.CommandTimeout = $ODBC_COMMAND_TIME_OUT
+     $da = new-object System.Data.Odbc.OdbcDataAdapter $cmd
+     try
+     {
+         $table = new-object System.Data.DataTable
+         $da.Fill($table) | out-null
+         # be carefull: it's considered as a collection ...
+         # therefore returned as an array if not empty
+         return ,$table
+     }
+     finally
+     {
+         $da.Dispose()
+     }
     }
     finally
     {
-        $da.Dispose()
+     $cmd.Dispose()
     }
 }
 
