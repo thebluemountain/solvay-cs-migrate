@@ -48,6 +48,9 @@ function installHAServer ($cnx, $cfg)
     # managing docbroker changes in the server.ini
     Update-Docbrokers $cfg
 
+    # ensure the 'share' mount-point's directory exist
+    Sync-SharedMountPoint $cfg
+
     # ------------------- Start Content Server service ------------------------------------
     Start-ContentServerService -Name $cfg.resolve('docbase.daemon.name')
 }
@@ -118,6 +121,11 @@ function installServer ($cnx, $cfg)
     # Save custom indexes definition in temp table and drop indexes
     Save-CustomIndexes -cnx $cnx -cfg $cfg
 
+    # do we want to reset the crypto stuff ?
+    if ('reset' -eq $cfg.resolve('docbase.aek'))
+    {
+        Reset-AEK -cnx $cnx
+    }
     # creating initialization files
     Create-IniFiles($cfg)
 

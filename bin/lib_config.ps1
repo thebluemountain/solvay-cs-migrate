@@ -752,6 +752,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.email = ''
  $docbase.connect_mode = 'native'
  $docbase.locale = 'native'
+ $docbase.aek = 'keep'
 
  # the configuration for daemon
  $docbase.daemon = createObj

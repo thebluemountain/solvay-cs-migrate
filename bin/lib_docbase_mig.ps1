@@ -280,7 +280,7 @@ function Change-InstallOwner($cnx, $cfg, [InstallOwnerChanges] $scope)
     $newUserDomain = $($cfg.resolve('user.domain'))
 
     $sql =
-    "BEGIN TRAN 
+    "BEGIN TRAN; 
     -- records previous user state ...
     SELECT * INTO dbo.mig_user FROM dbo.dm_user_s WHERE user_login_name = '$previousUserName';
     -- update the user
@@ -498,19 +498,49 @@ function Update-JobsTargetServer($cnx, $cfg)
 }
 
 <#
-    Updates mount points with the new host name
+    Updates mount points with the new host name and the file system path match $DOCUMENTUM/share 
+    for the 'share' mount-point
+    The actual directories are then checked by calling Sync-SharedMountPoint
 #>
 function Update-MountPoint($cnx, $cfg)
 {
+    # updates the mount-point definition
+    $sharepath = $cfg.resolve('env.documentum') + '\share'
     $sql = "
     BEGIN TRAN
     UPDATE dbo.dm_mount_point_s SET host_name = '$($cfg.resolve('env.COMPUTERNAME'))'
-    UPDATE dbo.dm_mount_point_s SET file_system_path = '$($cfg.resolve('env.documentum'))\share' 
+    UPDATE dbo.dm_mount_point_s SET file_system_path = '" + $sharepath + "' 
      WHERE r_object_id IN (SELECT r_object_id FROM dm_mount_point_sv WHERE object_name = 'share')
     COMMIT TRAN"
 
     Execute-NonQuery -cnx $cnx -sql $sql | Out-Null
-    Log-Info "Mount points successfully fixed"
+    Log-Info 'Mount points successfully fixed'
+
+    Sync-SharedMountPoint $cfg
+}
+
+<#
+    for the 'share' mount-point $DOCUMENTUM/share, ensure sub-folders 
+    data/events/${docbase.hexid}, data/common/${docbase.hexid} and temp are created 
+    if not found
+#>
+function Sync-SharedMountPoint ($cfg)
+{
+    $sharepath = $cfg.resolve('env.documentum') + '\share'
+    # make sure the sub-directory exists
+    $path = $sharepath + '\data\events\' + $cfg.docbase.hexid
+    New-Item -ItemType Directory -Force -Path $path
+
+    $path = $sharepath + '\data\common\' + $cfg.docbase.hexid
+    New-Item -ItemType Directory -Force -Path $path
+
+    $path = $sharepath + '\temp'
+    New-Item -ItemType Directory -Force -Path $path
+
+    $path = $sharepath + '\temp\dm_ca_store'
+    New-Item -ItemType Directory -Force -Path $path
+
+    Log-Info 'directories for shared mount-point were checked'
 }
 
 <#
@@ -1413,3 +1443,44 @@ function Register-DocbaseToJms($cfg)
     log-info "Docbase successfully registered to JMS"
 }
 
+<# 
+    reset the crypto keys related to the aek.key
+ #>
+function Reset-AEK ($cnx)
+{
+  $sql =
+    "BEGIN TRAN 
+    -- reset the docbase config
+    UPDATE dbo.dm_docbase_config_s SET 
+    i_crypto_key = ''
+    , i_ticket_crypto_key = '';
+
+    -- remove the marks for the dmi_object_type
+    DELETE dbo.dmi_object_type 
+    WHERE r_object_id IN 
+    (
+     SELECT r_object_id 
+     FROM dbo.dmi_vstamp_s 
+     WHERE i_application IN ('dm_docbase_config_crypto_key_init', 'dm_docbase_config_ticket_crypto_key_init')
+    );
+
+    -- remove the stamps
+    DELETE dbo.dmi_vstamp_s 
+    WHERE i_application IN ('dm_docbase_config_crypto_key_init', 'dm_docbase_config_ticket_crypto_key_init');
+
+    -- remove the publick key certificates
+    DELETE dbo.dm_sysobject_s WHERE r_object_id IN (SELECT r_object_id FROM dbo.dm_public_key_certificate_s WHERE key_type= 1);
+    DELETE dbo.dm_sysobject_r WHERE r_object_id IN (SELECT r_object_id FROM dbo.dm_public_key_certificate_s WHERE key_type= 1);
+    DELETE dbo.dm_public_key_certificate_s WHERE key_type= 1;
+
+    -- remove the crypto keys
+    DELETE dbo.dm_sysobject_s WHERE r_object_id IN (SELECT r_object_id FROM dbo.dm_cryptographic_key_s WHERE key_type= 1);
+    DELETE dbo.dm_sysobject_r WHERE r_object_id IN (SELECT r_object_id FROM dbo.dm_cryptographic_key_s WHERE key_type= 1);
+    DELETE dbo.dm_cryptographic_key_s WHERE key_type= 1;
+
+    -- OK, commit then
+    COMMIT TRAN;"
+
+  $r = Execute-NonQuery -cnx $cnx -sql $sql
+  Log-Info "Crypto configuration successfully reset"
+}
