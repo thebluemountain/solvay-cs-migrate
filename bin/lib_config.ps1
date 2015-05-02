@@ -777,6 +777,7 @@ function createDocbaseProps ($ini, $env, $db)
  $docbase.docbrokers.'0' = createObj
  $docbase.docbrokers.'0'.host = '${' + $env + '.COMPUTERNAME}'
  $docbase.docbrokers.'0'.port = 1489
+ $docbase.docbrokers.'0'.proximity = 1
 
  # for the JMS
  $docbase.jms = createObj

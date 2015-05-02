@@ -345,10 +345,12 @@ function Update-Docbrokers($cfg)
         }
         $hostname = $cfg.resolve('docbase.docbrokers.' + $i + '.host')
         $port = $cfg.resolve('docbase.docbrokers.' + $i + '.port')
+        $proximity = $cfg.resolve('docbase.docbrokers.' + $i + '.proximity')
         [iniFile]::WriteValue($iniPath, $section, "host", $hostname)
         [iniFile]::WriteValue($iniPath, $section, "port", $port)
+        [iniFile]::WriteValue($iniPath, $section, "proximity", $proximity)
 
-        Log-Verbose "Updated Docbroker $i host= $hostname port= $port"
+        Log-Verbose "Updated Docbroker $i host= $hostname port= $port proximity $proximity"
     }
     Log-Info 'Updated docbrokers'
 }
