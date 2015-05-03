@@ -91,6 +91,8 @@ function Create-IniFiles($cfg)
     Log-Verbose ('copied .cnt files into ' + $inipath)
 
     # updating the server.ini file
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'docbase_name', $cfg.resolve('docbase.name'))
+    [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'server_config_name', $cfg.resolve('docbase.config'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'database_password_file', "$inipath\dbpasswd.tmp.txt")
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'install_owner', $cfg.resolve('user.name'))
     [iniFile]::WriteValue($ini, 'SERVER_STARTUP', 'user_auth_target', $cfg.resolve('docbase.auth'))
