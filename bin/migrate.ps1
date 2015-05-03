@@ -380,6 +380,13 @@ try
         }
         elseif ('installha' -eq $action)
         {
+            # current current user's pwd
+            $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
+            if ($null -eq $pwd)
+            {
+                return
+            }
+            $cfg.user.pwd = $pwd
             installHAServer -cnx $cnx -cfg $cfg
         }
         elseif ('uninstall' -eq $action)
