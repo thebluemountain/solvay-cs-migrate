@@ -1,0 +1,824 @@
+Option Explicit
+
+/* 
+ can be invoked using: 
+ dmbasic -fdistributed_setup.ebs -pMyRepo dmadmin password demo-server 1489 demo-server2 9080 9080 1491 MyRepo2 -econfigure
+ it is possible to set the following environment variables prior to invoke the script:
+ DS_COMMIT: false to ensure no change is committed by the configure routine
+ DS_LOG: DEBUG, INFO, WARN or ERROR to change the logging level (default to INFO)
+ */
+Declare Sub configure ( _
+ ByVal server As String, _ 
+ ByVal loginname As String, _ 
+ ByVal pwd As String, _ 
+ ByVal brokerhost As String, _
+ ByVal brokerport As String, _
+ ByVal host As String, _ 
+ ByVal jmsport As String, _
+ ByVal acsport As String, _
+ ByVal newbrokerport As String, _
+ ByVal cfgname As String)
+
+Declare Sub check ( _
+ ByVal server As String, _ 
+ ByVal loginname As String, _ 
+ ByVal pwd As String, _ 
+ ByVal brokerhost As String, _
+ ByVal brokerport As String, _
+ ByVal host As String, _ 
+ ByVal jmsport As String, _
+ ByVal acsport As String, _
+ ByVal newbrokerport As String, _
+ ByVal cfgname As String)
+
+Declare Sub prepareBroker (ByVal host As String, ByVal port As String)
+
+Declare Function connect ( _
+ ByVal server As String, _
+ ByVal login As String, _
+ ByVal pwd As String) As String
+
+Declare Function disconnect (ByVal cnx As String) As Boolean
+
+Declare Function getServer (_
+ ByVal cnx As String, _
+ ByVal cfgname As String, _
+ create As Boolean) As String
+
+Declare Function getJMSConfig (_
+ ByVal cnx As String, _
+ ByVal serverId As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ ByVal brokerport As String, _
+ create As Boolean) As String
+Declare Function createJMSConfig (_
+ ByVal cnx As String, _
+ ByVal serverId As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ ByVal brokerport As String) As String
+Declare Sub checkJMS (_
+ ByVal cnx As String, _
+ ByVal id As String, _
+ ByVal jmsname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ ByVal brokerport As String)
+Declare Function getACSConfig (_
+ ByVal cnx As String, _
+ ByVal serverId As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal acsport As String, _
+ create As Boolean) As String
+Declare Function createACSConfig (_ 
+ ByVal cnx As String, _ 
+ ByVal serverId As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal port As String) As String
+
+Declare Sub checkACS (_ 
+ ByVal cnx As String, _
+ ByVal id As String, _
+ ByVal acsname As String, _
+ ByVal host As String, _
+ ByVal port As String)
+
+Declare Sub printErr (ByVal message As String)
+Declare Sub printLog (ByVal message As String)
+Declare Function getError (ByVal cnx As String) As String
+Declare Function isCommit As Boolean
+Declare Sub initLogLevel
+Declare Function GetTickCount Lib "kernel32.dll" () As Long
+
+Declare Function checkedGet (_
+ ByVal verb As String, _
+ ByVal cnx As String, _
+ ByVal param As String, _
+ ByVal errtitle As String) As String
+Declare Sub checkedSet (_
+ ByVal verb As String, _
+ ByVal cnx As String, _ 
+ ByVal param As String, _
+ ByVal value As String, _
+ ByVal errtitle As String)
+Declare Sub checkedExec ( _
+ ByVal verb As String, _
+ ByVal cnx As String, _ 
+ ByVal param As String, _
+ ByVal errtitle As String)
+
+Function getError (ByVal cnx As String) As String
+    getError = dmAPIGet ("getmessage," & cnx & ",3")
+End Function
+
+Const DEBUG_LEVEL As Integer = 0
+Const INFO_LEVEL As Integer = 1
+Const WARN_LEVEL As Integer = 2
+Const ERROR_LEVEL As Integer = 3
+
+' the environment variables that can be set
+Const ENV_DS_COMMIT As String = "DS_COMMIT"
+Const ENV_DS_LOG As String = "DS_LOG"
+
+Public LEVEL As Integer
+
+Function isCommit As Boolean
+ Dim value As String
+
+ value = Environ$ (ENV_DS_COMMIT)
+ If ("false" = value) Then 
+  isCommit = False
+ ElseIf ("" = value) Then
+  isCommit = True
+ Else
+  printErr "invalid value for " & ENV_DS_COMMIT & _
+   " environment variable: either expected 'false' or no value: '" & _
+   value & "'"
+ End If
+End Function
+
+Sub initLogLevel
+ Dim value As String
+
+ value = Environ$ (ENV_DS_LOG)
+ If ("DEBUG" = value) Then
+  LEVEL = DEBUG_LEVEL
+ ElseIf ("INFO" = value) Then
+  LEVEL = INFO_LEVEL
+ ElseIf ("WARN" = value) Then
+  LEVEL = WARN_LEVEL
+ ElseIf ("ERROR" = value) Then
+  LEVEL = ERROR_LEVEL
+ ElseIf ("" = value) Then
+  LEVEL = INFO_LEVEL
+ Else
+  printErr "invalid value for " & ENV_DS_LOG & _
+   " environment variable: either expected 'DEBUG', 'INFO', 'WARN', 'ERROR' or no value: '" & _
+   value & "'"
+ End If
+End Sub
+
+Sub printErr (ByVal message As String)
+ printLog "[ERROR] " & message
+End Sub
+
+Sub printWarn (ByVal message As String)
+ If (LEVEL <= WARN_LEVEL) Then
+  printLog "[WARN] " & message
+ End If
+End Sub
+
+Sub printInfo (ByVal message As String)
+ If (LEVEL <= INFO_LEVEL) Then
+  printLog "[INFO] " & message
+ End If
+End Sub
+
+Sub printDebug (ByVal message As String)
+ If (LEVEL <= DEBUG_LEVEL) Then
+  printLog "[DEBUG] " & message
+ End If
+End Sub
+
+Sub printLog (ByVal message As String)
+    Dim dt As Date
+    dt = Now()
+    Print Format(Year(dt), "0000") & Format(Month(dt), "00") & Format(Day(dt), "00") & "-" & _ 
+        Format(Hour(dt), "00") & Format(Minute(dt), "00") & Format(Second(dt), "00") & ": " & _ 
+        message
+End Sub
+
+
+Function checkedGet (_
+ ByVal verb As String, _
+ ByVal cnx As String, _
+ ByVal param As String, _
+ ByVal errtitle As String) As String
+ Dim cmd As String
+ Dim val As String
+ Dim errmsg As String
+ cmd = verb & "," & cnx
+ If ("" <> param) Then 
+  cmd = cmd & "," & param
+ End If
+ val = dmAPIGet(cmd)
+ If ("" = val) Then
+  errmsg = getError (cnx)
+  If ("" <> errmsg) Then
+   printDebug "checkedGet(" & cmd & ") -> [error]"
+   printErr errtitle & ": " & errmsg
+   Error 1001
+  End If
+ End If
+ printDebug "checkedGet(" & cmd & ") = " & val
+ checkedGet = val
+End Function
+
+Sub checkedSet (_
+ ByVal verb As String, _
+ ByVal cnx As String, _
+ ByVal param As String, _
+ ByVal value As String, _
+ ByVal errtitle As String)
+ Dim cmd As String
+ Dim ret As Boolean
+ cmd = verb & "," & cnx
+ If ("" <> param) Then 
+  cmd = cmd & "," & param
+ End If
+ If (False = dmAPISet (cmd, value)) Then
+  printDebug "checkedSet(" & cmd & ", " & value & ") -> [error]"
+  printErr errtitle & ": " & getError(cnx)
+  Error 1011
+ End If
+ printDebug "checkedSet(" & cmd & ", " & value & ")"
+End Sub
+
+Sub checkedExec (_
+ ByVal verb As String, _
+ ByVal cnx As String, _
+ ByVal param As String, _
+ ByVal errtitle As String)
+ Dim cmd As String
+ cmd = verb & "," & cnx
+ If ("" <> param) Then 
+  cmd = cmd & "," & param
+ End If
+ If (False = dmAPIExec (cmd)) Then
+  printDebug "checkedExec(" & cmd & ") -> [error]"
+  printErr errtitle & ": " & getError(cnx)
+  Error 1021
+ End If
+ printDebug "checkedExec(" & cmd & ")"
+End Sub
+
+Sub prepareBroker (ByVal host As String, ByVal port As String)
+ Dim count As Integer
+ Dim index As Integer
+ Dim ret As Boolean
+ Dim param As String
+ count = CInt (checkedGet ("values", "a", "apiconfig,dfc.docbroker.host", _ 
+  "cannot read number of declared docbrokers"))
+ For index = 0 To (count - 1) Step 1
+  checkedSet "set", "a", "apiconfig,dfc.docbroker.host[" & index & "]", host, "cannot set broker host"
+  checkedSet "set", "a", "apiconfig,dfc.docbroker.port[" & index & "]", port, "cannot set broker port"
+ Next index
+End Sub
+
+Function connect (ByVal server As String, _ 
+ ByVal login As String, ByVal pwd As String) As String
+ Dim cnx As String
+
+ cnx = dmAPIGet ("connect," & server & "," & login & "," & pwd)
+ If ("" = cnx) Then
+  printErr "cannot connect to " & server & " as user " & login & ": " & getError ("a")
+  Error 1031
+ End If
+ connect = cnx
+End Function
+
+Function disconnect (ByVal cnx As String) As Boolean
+    Dim val As Boolean
+    val = dmAPIExec ("disconnect," & cnx)
+    If (False = val) Then
+        printErr "cannot disconnect: " & getError (cnx)
+        disconnect = False
+    Else
+        disconnect = True
+    End If
+End Function
+
+Function getServer (ByVal cnx As String, ByVal cfgname As String, create As Boolean) As String
+ Dim id As String
+ id = checkedGet ("id", cnx, _
+ "dm_server_config WHERE object_name = '" & cfgname & "'", _
+ "cannot read server config")
+ If ("" = id) Then
+  If (False = create) Then 
+   printErr "there is no server configuration named '" & cfgname & "'"
+   Error 1041
+  End If
+  ' creates a new server config
+  id = checkedGet("get", cnx, "serverconfig,r_object_id", _
+   "cannot get current server config id")
+  If ("" = id) Then
+   printErr "cannot get current server config id"
+   Error 1042
+  End If
+  checkedExec "fetch", cnx, id, "cannot fetch current server config"
+
+  checkedSet "set", cnx, id & ",object_name", cfgname, "cannot set server config name"
+  id = checkedGet ("saveasnew", cnx, id, "cannot save new server config")
+  printInfo "created server config '" & cfgname & "' (" & id & ")"
+ Else
+  printInfo "found server config '" & cfgname & "' (" & id & ")"
+ End If
+ getServer = id
+End Function
+
+Function getACSConfig (_
+ ByVal cnx As String, _         ' the connection identifier
+ ByVal serverId As String, _    ' the related server configuration identifier
+ ByVal cfgname As String, _     ' the name of the related server configuration
+ ByVal host As String, _        ' the host name to associate to the ACS config
+ ByVal acsport As String, _     ' the port of the ACS server
+ create As Boolean _            ' indicates whether to create if it does not exists
+) As String
+ Dim col As String
+ Dim id As String
+ Dim acsname As String
+
+ col = checkedGet("readquery", cnx, _
+  "SELECT r_object_id, svr_config_id, config_type, acs_base_url, " & _
+  "acs_supported_protocol, projection_enable, object_name, config_type, " & _
+  "is_cache_acs, acs_rw_capability FROM dm_acs_config " & _
+  "WHERE svr_config_id = '" & serverId & "'", "cannot read acs config")
+ If ("" = col) Then
+  printErr "cannot read ACS config from query"
+  Error 1051
+ End If
+ On Error Goto ACSOnError
+
+ If (False = dmAPIExec("next," & cnx & "," & col)) Then 
+  ' OK, should create it
+  checkedExec "close", cnx, col, "cannot close ACS query"
+  col = ""
+  If (False = create) Then 
+   printErr "there is no JMS configuration for server config '" & _
+    cfgname & "' (" & serverId  & ")"
+   Error 1052
+  End If
+  id = createACSConfig (cnx, serverId, cfgname, host, acsport)
+ Else
+  id = checkedGet ("get", cnx, col & ",r_object_id", "cannot read matching ACL config id")
+  acsname = checkedGet ("get", cnx, col & ",object_name", "cannot read matching ACL config name")
+  checkACS cnx, col, acsname, host, acsport
+  printInfo "found ACS config '" & acsname & "' (" & id & ")"
+ End If
+ getACSConfig = id
+
+ACSOnError:
+ If ("" <> col) Then
+  checkedExec "close", cnx, col, "cannot close ACS query"
+ End If
+ If (0 <> Err) Then
+  Err.Raise Err.Number, Err.Source, Err.Description
+ end If
+
+End Function
+
+Function createACSConfig (_ 
+ ByVal cnx As String, _         ' the connection identifier
+ ByVal serverId As String, _    ' the related server configuration identifier
+ ByVal cfgname As String, _     ' the related server configuration name
+ ByVal host As String, _        ' the name of the 
+ ByVal port As String _         ' the ACS server port
+) As String
+
+ Dim id As String
+ Dim docbase As String
+ Dim objname As String
+
+ docbase = checkedGet ("get", cnx, "docbaseconfig,object_name", "cannot get current docbase name")
+ id = checkedGet ("id", cnx, "dm_acs_config", "cannot retrieve ACS config")
+ If ("" = id) Then 
+  printErr "there is no ACS config in docbase"
+  Error 1061
+ End If
+
+ ' set the name ...
+ objname = docbase & "." & cfgname & "@" & host & ":" & port
+ checkedSet "set", cnx, id & ",object_name", objname, "cannot set ACS name"
+ ' ... the cache
+ checkedSet "set", cnx, id & ",is_cache_acs", "F", "cannot set cache mode"
+ checkedSet "set", cnx, id & ",server_major_version", "2", "cannot set server major version"
+ checkedSet "set", cnx, id & ",server_major_version", "3", "cannot set server minor version"
+ checkedSet "set", cnx, id & ",svr_config_id", serverId, "cannot set related server config id"
+
+ ' resets the supported store types
+ checkedExec "truncate", cnx, id & ",supported_store_types", "cannot reset supported store types"
+ checkedSet "append", cnx, id & ",supported_store_types", "1", "cannot add file store as supported store type"
+
+ ' reset projections & netlocations
+ checkedExec "truncate", cnx, id & ",projection_netloc_enable", "cannot reset network locations"
+ checkedExec "truncate", cnx, id & ",projection_netloc_ident", "cannot reset network locations"
+ checkedExec "truncate", cnx, id & ",acs_network_locations", "cannot reset network locations"
+ checkedExec "truncate", cnx, id & ",projection_enable", "cannot reset projections"
+ checkedExec "truncate", cnx, id & ",projection_proxval", "cannot reset projections"
+ checkedExec "truncate", cnx, id & ",projection_targets", "cannot reset projections"
+ checkedExec "truncate", cnx, id & ",projection_ports", "cannot reset projections"
+ ' resets the url
+ checkedExec "truncate", cnx, id & ",acs_base_url", "cannot reset base URLs"
+ checkedExec "truncate", cnx, id & ",acs_supported_protocol", "cannot reset protocols"
+ checkedSet "append", cnx, id & ",acs_supported_protocol", "http", "cannot add http protocol"
+ checkedSet "append", cnx, id & ",acs_base_url", "http://" & host & ":" & port & "/ACS/servlet/ACS", "cannot add url"
+
+ id = checkedGet ("saveasnew", cnx, id, "cannot save new ACS config")
+ printInfo "created new ACS config '" & objname & "' (" & id & ")"
+ createACSConfig = id
+End Function
+
+Sub checkACS (_ 
+ ByVal cnx As String, _         ' the connection identifier
+ ByVal id As String, _          ' provides access to ACS meta-data to check
+ ByVal acsname As String, _     ' carries the actual name of the ACS config to check
+ ByVal host As String, _        ' holds the expected host'
+ ByVal port As String _         ' holds the expected port
+)
+ Dim value As String
+ Dim count As Integer
+ Dim index As Integer
+ Dim protocol As String
+ Dim expected As String
+
+ ' check the ACS is enabled
+ value = checkedGet ("get", cnx, id & ",acs_rw_capability", "cannot read ACS RW capability")
+ If ("0" = value) Then 
+  printErr "ACS config '" & acsname & "' is disabled"
+  Error 1071
+ End If
+
+ value = checkedGet ("get", cnx, id & ",config_type", "cannot read ACS config type")
+ If ("1" <> value) Then 
+  printErr "ACS config '" & acsname & "' defined in near-stores"
+  Error 1072
+ End If
+
+ count = CInt(checkedGet("values", cnx, id & ",acs_supported_protocol", "cannot count ACS protocols"))
+ If (0 = count) Then
+  printErr "ACS config " & acsname & " does not have any supported protocol"
+  Error 1073
+ End If
+
+ ' check at the URI
+ For index  = 0 To (count -1) Step 1
+  protocol = checkedGet ("get", cnx, id & ",acs_supported_protocol[" & index & "]", "cannot get ACS protocol")
+  expected = protocol & "://" & host & ":" & port & "/ACS/servlet/ACS"
+  value = checkedGet ("get", cnx, id & ",acs_base_url[" & index & "]", "cannot get ACS base URL")
+  If (value <> expected) Then
+   printErr "unexpected URI for protocol " & protocol & ": got '" & value & "' (expected " & expected & ")"
+   Error 1074
+  End If
+ Next index
+
+ count = CInt(checkedGet("values", cnx, id & ",projection_enable", "cannot count docbroker projections"))
+ If (0 < count) Then
+  printErr "ACS config " & acsname & " enables docbroker projection"
+  Error 1075
+ End If
+End Sub
+
+Function getJMSConfig (_
+ ByVal cnx As String, _         ' the connection identifier
+ ByVal serverId As String, _    ' the related server configuration object identifier
+ ByVal cfgname As String, _     ' the name of the server configuration name
+ ByVal host As String, _        ' the name of the host running the JMS
+ ByVal jmsport As String, _     ' the port of the JMS
+ ByVal brokerport As String, _  ' the port of the docbroker to advertise to
+ create As Boolean _            ' indicates whether to create if it does not exists
+) As String
+ Dim id As String
+ Dim jmsname As String
+ Dim overname As String
+ Dim col As String
+ col = checkedGet("readquery", cnx, _
+  "SELECT r_object_id, object_name, servlet_name, base_uri, projection_enable, " & _
+  "projection_proximity_value, projection_targets, projection_ports " & _
+  "FROM dm_jms_config WHERE ANY server_config_id = '" & _
+  serverId & "'", "cannot read jms config")
+ If ("" = col) Then
+  printErr "cannot read JMS config from query"
+  Error 1081
+ End If
+ On Error Goto JMSOnError
+ If (False = dmAPIExec("next," & cnx & "," & col)) Then 
+  ' OK, should create it
+  checkedExec "close", cnx, col, "cannot close JMS query"
+  col = ""
+  If (False = create) Then 
+   printErr "there is no JMS configuration for server config '" & _
+    cfgname & "' (" & serverId  & ")"
+   Error 1082
+  End If
+
+  id = createJMSConfig (cnx, serverId, cfgname, host, jmsport, brokerport)
+ Else
+  ' get current server ...
+  id = checkedGet ("get", cnx, col & ",r_object_id", "cannot read object id from JMS config ")
+  jmsname = checkedGet ("get", cnx, col & ",object_name", "cannot read name from JMS config ")
+  checkJMS cnx, col, jmsname, host, jmsport, brokerport
+  ' to ensure there is only 1!
+  If (True = dmAPIExec("next," & cnx & "," & col)) Then 
+   overname = checkedGet ("get", cnx, col & ",object_name", "cannot read name from JMS config ")
+   printErr "multiple JMS config matching server config " & serverId & ": " & _
+    jmsname & " (" & id & ") and " & _
+    dmAPIGet("get," & cnx & "," & col & ",object_name") & " (" & _
+    dmAPIGet("get," & cnx & "," & col & ",r_object_id") & ")"
+   Error 1083
+  End If
+  printInfo "found JMS config '" & cfgname & "' (" & id & ")"
+ End If
+ getJMSConfig = id
+
+JMSOnError:
+ If ("" <> col) Then
+  checkedExec "close", cnx, col, "cannot close JMS query"
+ End If
+ If (0 <> Err) Then
+  Err.Raise Err.Number, Err.Source, Err.Description
+ end If
+End Function
+
+Sub checkJMS (_
+ ByVal cnx As String, _
+ ByVal id As String, _
+ ByVal jmsname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ ByVal brokerport As String _
+)
+ Dim count As Integer
+ Dim index As Integer
+ Dim expected As String
+ Dim value As String
+ Dim param As String
+ Dim servlet As String
+ Dim found As Boolean
+
+ ' checks the base_uri
+ count = CInt(checkedGet("values", cnx, id & ",servlet_name", _
+  "cannot count number of servlets"))
+ For index = 0 To (count - 1) Step 1
+  param = id & ",base_uri[" & index & "]"
+  expected = "http://" & host & ":" & jmsport
+  servlet = checkedGet ("get", cnx, id & ",servlet_name[" & index & "]", _
+   "cannot get servlet name at " & index)
+  If ("do_mail" = servlet) Then
+   expected = expected & "/DmMail/servlet/DoMail"
+  ElseIf ("do_method" = servlet) Then 
+   expected = expected & "/DmMethods/servlet/DoMethod"
+  ElseIf ("do_bpm" = servlet) Then 
+   expected = expected & "/bpm/servlet/DoMethod"
+  Else
+   printErr "unexpected servlet to process: " & servlet
+   Error 1091
+  End If
+  value = checkedGet ("get", cnx, param, "cannot read base uri from JMS config")
+  If (value <> expected) Then
+   printErr "unexpected URI for servlet " & servlet & ": got '" & value & "' (expected " & expected & ")"
+   Error 1092
+  End If
+ Next index
+
+ ' docbroker stuff then
+ value = checkedGet ("get", cnx, id & ",projection_enable", "cannot read whether projection is enabled")
+ If ("1" <> value) Then
+  printErr "projection is disabled for JMS config '" & jmsname & "'"
+  Error 1093
+ End If
+ count = CInt(checkedGet("values", cnx, id & ",projection_targets", "cannot count number of projection targets"))
+ If (0 = count) Then
+  printErr "no projection target defined for JMS config '" & jmsname & "'"
+  Error 1094
+ End If
+ found = False
+ For index = 0 To (count - 1) Step 1
+  value = checkedGet("get", cnx, id & ",projection_targets[" & index & "]", "cannot read projection target")
+  If (value = host) Then
+   found = True
+/*
+   there is a problem with the attribute: it is always reset to 0 by the content server !
+   value = checkedGet("get", cnx, id & ",projection_ports[" & index & "]", "cannot read projection port")
+   If (0 = value) Then 
+    value = "1489"
+   End If
+   If (value = brokerport) Then
+    found = True
+   End If
+*/
+  End If
+ Next index
+ If (Not found) Then
+  printErr "cannot find docbroker projection for host " & _
+   host & " on port " & brokerport & " in JMS config '" & jmsname & "'"
+  Error 1095
+ End If
+End Sub
+
+Function createJMSConfig (_
+ ByVal cnx As String, _
+ ByVal serverId As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ ByVal brokerport As String) As String
+ Dim id As String
+ Dim count As Integer
+ Dim index As Integer
+ Dim docbase As String
+ Dim servlet As String
+ Dim param As String
+ Dim value As String
+ Dim objname As String
+
+ id = checkedGet ("id", cnx, "dm_jms_config", "cannot retrieve JMS config")
+ If ("" = id) Then 
+  printErr "there is no JMS config in docbase"
+  Error 1101
+ End If
+
+ docbase = checkedGet ("get", cnx, "docbaseconfig,object_name", _
+  "cannot retrieve current docbase name")
+
+ ' set the object_name
+ objname = "JMS " & host & ":" & jmsport & " for " & docbase & "." & cfgname
+ checkedSet "set", cnx, id & ",object_name", objname, "cannot set JMS name"
+ ' reset the server_config_id
+ checkedExec "truncate", cnx, id & ",server_config_id", "cannot reset server_config_id"
+ checkedSet "append", cnx, id & ",server_config_id", serverId, _
+  "cannot change server_config_id"
+
+ ' patches the base_uri
+ count = CInt(checkedGet("values", cnx, id & ",servlet_name", "cannot count number of servlets"))
+ For index = 0 To (count -1) Step 1
+  param = id & ",base_uri[" & index & "]"
+  value = "http://" & host & ":" & jmsport
+  servlet = checkedGet ("get", cnx, id & ",servlet_name[" & index & "]", "cannot get servlet name at " & index)
+  If ("do_mail" = servlet) Then
+   value = value & "/DmMail/servlet/DoMail"
+  ElseIf ("do_method" = servlet) Then 
+   value = value & "/DmMethods/servlet/DoMethod"
+  ElseIf ("do_bpm" = servlet) Then 
+   value = value & "/bpm/servlet/DoMethod"
+  Else
+   printErr "unexpected servlet to process: " & servlet
+   Error 1102
+  End If
+  checkedSet "set", cnx, param, value, "cannot set value for servlet " & servlet
+ Next index
+
+ ' reset the docbroker stuff
+ checkedExec "truncate", cnx, id & ",projection_proximity_value", "cannot reset projection proximity values"
+ checkedExec "truncate", cnx, id & ",projection_targets", "cannot reset projection targets"
+ checkedExec "truncate", cnx, id & ",projection_ports", "cannot reset projection ports"
+ checkedExec "truncate", cnx, id & ",projection_enable", "cannot reset projection enabling"
+
+ checkedSet "append", cnx, id & ",projection_proximity_value", "1", "cannot set projection proximity"
+ checkedSet "append", cnx, id & ",projection_targets", host, "cannot set projection target"
+ checkedSet "append", cnx, id & ",projection_ports", brokerport, "cannot set projection port"
+ checkedSet "append", cnx, id & ",projection_enable", "T", "cannot enable projection"
+
+ id = checkedGet ("saveasnew", cnx, id,"cannot save new JMS config")
+ printInfo "created new JMS config '" & objname & "' (" & id & ")"
+ createJMSConfig = id
+End Function
+
+Public Sub configure ( _ 
+ ByVal server As String, _          ' the docbase name to connect to
+ ByVal loginname As String, _       ' the user to login with
+ ByVal pwd As String, _             ' the password to use
+ ByVal brokerhost As String, _      ' the name of the machine running the broker to connect through
+ ByVal brokerport As String, _      ' the port of the broker to connect through
+ ByVal host As String, _            ' the name of the host to configure server config, jms and acs for
+ ByVal jmsport As String, _         ' the port to the JMS
+ ByVal acsport As String, _         ' the port to the ACS
+ ByVal newbrokerport As String, _   ' the port to the docbroker to configure JMS for
+ ByVal cfgname As String _         ' the name of the server configuration to configure
+)
+
+ Dim cnx As String      ' the connection
+ Dim serverId As String ' the server config identifier
+ Dim jmsid As String    ' the jms id
+ Dim acsid As String    ' the acs id
+ Dim commit As Boolean
+
+ initLogLevel
+ commit = isCommit
+
+ On Error Goto terminate
+ ' prepare the docbroker configuration
+ prepareBroker brokerHost, brokerPort
+
+ ' first connect
+ cnx = connect (server, loginname, pwd)
+ If ("" = cnx) Then
+  dmExit(1111) ' should not happen
+ End If
+
+ checkedExec "begintran", cnx, "", "cannot begin transaction"
+
+ ' get appropriate server
+ serverId = getServer (cnx, cfgname, True)
+ ' get appropriate jms
+ jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, True)
+ ' get appropriate acs config
+ acsid = getACSConfig (cnx, serverId, cfgname, host, acsport, True)
+ If ("True" = commit)  Then
+  checkedExec "commit", cnx, "", "cannot commit transaction"
+ Else
+  ' just checks whether thing would be ok:
+  serverId =  getServer (cnx, cfgname, False)
+  jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, False)
+  acsid = getACSConfig (cnx, serverId, cfgname, host, acsport, False)
+  printLog "{config: """ & serverId & """,jms: """ & jmsid & """, acs: """ & acsid & """}"
+  checkedExec "abort", cnx, "", "cannot abort transaction"
+ End If
+terminate:
+ If ("" <> cnx) Then
+  If (Not disconnect(cnx)) Then
+   dmExit(1112)
+  End If
+ End If
+ If (0 <> Err) Then
+  ' another error occured then
+  printErr Err.Description & " (" & Err.Number & ")@" & Erl & ")"
+  dmExit(Err.number)
+ End If
+End Sub
+
+
+Public Sub check ( _ 
+ ByVal server As String, _          ' the docbase name to connect to
+ ByVal loginname As String, _       ' the user to login with
+ ByVal pwd As String, _             ' the password to use
+ ByVal brokerhost As String, _      ' the name of the machine running the broker to connect through
+ ByVal brokerport As String, _      ' the port of the broker to connect through
+ ByVal host As String, _            ' the name of the host to configure server config, jms and acs for
+ ByVal jmsport As String, _         ' the port to the JMS
+ ByVal acsport As String, _         ' the port to the ACS
+ ByVal newbrokerport As String, _   ' the port to the docbroker to configure JMS for
+ ByVal cfgname As String _           ' the name of the server configuration to configure
+)
+
+ Dim cnx As String      ' the connection
+ Dim serverId As String ' the server config identifier
+ Dim jmsid As String    ' the jms id
+ Dim acsid As String    ' the acs id
+
+ initLogLevel
+
+ On Error Goto terminate
+ ' prepare the docbroker configuration
+ prepareBroker brokerhost, brokerport
+
+ ' first connect
+ cnx = connect (server, loginname, pwd)
+ If ("" = cnx) Then
+  Exit Sub
+ End If
+
+ ' get appropriate server
+ printInfo "checking the server configuration"
+ serverId =  getServer (cnx, cfgname, False)
+
+ ' get appropriate jms
+ jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, False)
+ ' get appropriate acs config
+ printInfo "checking the ACS configuration"
+ acsid = getACSConfig (cnx, serverId, cfgname, host, acsport, False)
+ printLog "{config: """ & serverId & """,jms: """ & jmsid & """, acs: """ & acsid & """}"
+terminate:
+ If ("" <> cnx) Then
+  If (Not disconnect(cnx)) Then
+   dmExit(2)
+  End If
+ End If
+ If (0 <> Err) Then
+  ' another error occured then
+  printErr Err.Description & " (" & Err.Number & ")@" & Erl & ")"
+  dmExit(Err.number)
+ End If
+End Sub
+
+Public Sub Main
+ Print "usage:"
+ Print " -e: check|configure"
+ Print " -p (parameters):"
+ Print "  server: The name of the docbase to connect to"
+ Print "  loginname: The name of the user to connect as"
+ Print "  pwd: The password to use for the user"
+ Print "  brokerhost: The name of the broker to connect through"
+ Print "  brokerport: The port of the broker to connect through"
+ Print "  host: The name of the machine distributed server resides"
+ Print "  jmsport: The port of the JMS to configure server for"
+ Print "  acsport: The port of the ACS to configure server for"
+ Print "  newbrokerport: The port of the docbroker on supplied host to register JMS onto"
+ Print "  cfgname: The server configuration name to check or configure"
+ Print "  commit (for configure only): If matching 'True', commits the changes at the end"
+ Print ""
+ Print "The following environment variables can be set:"
+ Print " DS_COMMIT: if matching value 'false', the configure does not "
+ Print "  commit any changes and just validates before rolling-back."
+ Print "  If not set, commit occurs"
+ Print " DS_LOG: The log level to use. It either matches DEBUG, INFO, WARN or ERROR."
+ Print "  If not set, the logging level is INFO"
+
+ initLogLevel
+ Print "log level is set to " & LEVEL
+ Print "commit is set to " & isCommit
+End Sub
