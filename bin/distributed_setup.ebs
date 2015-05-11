@@ -809,7 +809,6 @@ Public Sub Main
  Print "  acsport: The port of the ACS to configure server for"
  Print "  newbrokerport: The port of the docbroker on supplied host to register JMS onto"
  Print "  cfgname: The server configuration name to check or configure"
- Print "  commit (for configure only): If matching 'True', commits the changes at the end"
  Print ""
  Print "The following environment variables can be set:"
  Print " DS_COMMIT: if matching value 'false', the configure does not "
