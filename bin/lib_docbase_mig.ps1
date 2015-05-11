@@ -618,6 +618,22 @@ function Update-AppServerURI($cnx, $cfg)
     Log-Info "app_server_uri updated successfully"
 }
 
+function Test-DocbaseConfig ($cnx, $conf)
+{
+    $sql =
+    "select r_object_id from dbo.dm_server_config_sv 
+     where (object_name = '$($cfg.resolve('docbase.config'))' AND i_has_folder = 1)"
+    $id = Execute-Scalar -cnx $cnx -sql $sql
+    if ($null -eq $id)
+    {
+        throw "There is no dm_server_config object named $($cfg.resolve('docbase.config'))"
+    }
+    $sql =
+    "select r_object_id from dbo.dm_jms_config_sv 
+     where (object_name = '$($cfg.resolve('docbase.config'))' AND i_has_folder = 1)"
+
+}
+
 <#
  the method that checks that datamodel is currently marked as a 
  7.1 docbase.
