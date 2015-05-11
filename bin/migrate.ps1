@@ -372,6 +372,12 @@ try
         }
         elseif ('upgrade' -eq $action)
         {
+            # current current user's pwd
+            $pwd = readPwd $cfg.resolve('user.domain') $cfg.resolve('user.name')
+            if ($null -eq $pwd)
+            {
+                return
+            }
             upgradeServer -cfg $cfg
         }
         elseif ('restore' -eq $action)
