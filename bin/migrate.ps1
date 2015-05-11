@@ -290,6 +290,7 @@ function usage ()
     write-host '   restore: restore jobs states and indexes once docbase is upgraded'
     write-host '   uninstall: uninstall an existing content server instance'
     write-host '   dump: dumps the current configuration and the resolved equivalent'
+    write-host '   dumpr: dumps the current configuration once resolved'
     write-host '   help: displays this screen'
 }
 try
@@ -403,6 +404,9 @@ try
         {
             write 'configuration (raw):'
             write $cfg.dump()
+        }
+        elseif ('dumpr' -eq $action)
+        {
             write 'configuration (resolved):'
             write $cfg.show()
         }

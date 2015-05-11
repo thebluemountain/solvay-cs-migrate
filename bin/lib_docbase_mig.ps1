@@ -65,7 +65,7 @@ function New-DocbaseService($obj)
     {
         throw "The docbase service $($obj.name) already exists"
     }
-    $out = New-Service -Name $obj.name -DisplayName $obj.display -StartupType Automatic -BinaryPathName $obj.commandLine -Credential $obj.credentials
+    $out = New-Service -Name $obj.name -DisplayName $obj.display -StartupType Manual -BinaryPathName $obj.commandLine -Credential $obj.credentials
     Log-Verbose $out
     Log-Info "Docbase service $($obj.name) successfully created."
 }
@@ -591,7 +591,6 @@ function Update-AppServerURI($cnx, $cfg)
      where (object_name = '$($cfg.resolve('docbase.config'))' AND i_has_folder = 1)"
 
     $id = Execute-Scalar -cnx $cnx -sql $sql
-
     if ($null -eq $id)
     {
         throw "Could not find the a valid dm_server_config object for docbase $($cfg.resolve('docbase.config'))"
