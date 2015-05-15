@@ -43,6 +43,8 @@ Declare Function disconnect (ByVal cnx As String) As Boolean
 Declare Function getServer (_
  ByVal cnx As String, _
  ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
  create As Boolean) As String
 
 Declare Function getJMSConfig (_
@@ -293,8 +295,15 @@ Function disconnect (ByVal cnx As String) As Boolean
     End If
 End Function
 
-Function getServer (ByVal cnx As String, ByVal cfgname As String, create As Boolean) As String
+Function getServer (_
+ ByVal cnx As String, _
+ ByVal cfgname As String, _
+ ByVal host As String, _
+ ByVal jmsport As String, _
+ create As Boolean) As String
  Dim id As String
+ Dim index As Integer
+ Dim value As String
  id = checkedGet ("id", cnx, _
  "dm_server_config WHERE object_name = '" & cfgname & "'", _
  "cannot read server config")
@@ -312,7 +321,27 @@ Function getServer (ByVal cnx As String, ByVal cfgname As String, create As Bool
   End If
   checkedExec "fetch", cnx, id, "cannot fetch current server config"
 
+  ' sets the object_name ...
   checkedSet "set", cnx, id & ",object_name", cfgname, "cannot set server config name"
+  ' but also patches the app_server_uri for the app_server_name valued at 'do_method', 'do_mail' and 'do_bpm'
+  index = checkedGet ("locate", cnx, id & ",app_server_name,do_method", "locating do_method index")
+  If (-1 < index) Then
+   value = "http://" & host & ":" & jmsport & 9080 & "/DmMethods/servlet/DoMethod"
+   checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
+    value , "cannot set address " & value & " for application do_method"
+  End If
+  index = checkedGet ("locate", cnx, id & ",app_server_name,do_mail", "locating do_mail index")
+  If (-1 < index) Then
+   value = "http://" & host & ":" & jmsport & 9080 & "/DmMail/servlet/DoMail"
+   checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
+    value , "cannot set address " & value & " for application do_mail"
+  End If
+  index = checkedGet ("locate", cnx, id & ",app_server_name,do_bpm", "locating do_bpm index")
+  If (-1 < index) Then
+   value = "http://" & host & ":" & jmsport & 9080 & "/bpm/servlet/DoMethod"
+   checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
+    value , "cannot set address " & value & " for application do_bpm"
+  End If
   id = checkedGet ("saveasnew", cnx, id, "cannot save new server config")
   printInfo "created server config '" & cfgname & "' (" & id & ")"
  Else
@@ -358,7 +387,7 @@ Function getACSConfig (_
   id = checkedGet ("get", cnx, col & ",r_object_id", "cannot read matching ACL config id")
   acsname = checkedGet ("get", cnx, col & ",object_name", "cannot read matching ACL config name")
   checkACS cnx, col, acsname, host, acsport
-  printInfo "found ACS config '" & acsname & "' (" & id & ")"
+  printInfo "found ACS config '" & acsname & "' (" & id & ") for config '" & cfgname & "'"
  End If
  getACSConfig = id
 
@@ -392,13 +421,15 @@ Function createACSConfig (_
  End If
 
  ' set the name ...
- objname = docbase & "." & cfgname & "@" & host & ":" & port
+ objname = "ACS:" & docbase & "." & cfgname & "@" & host & ":" & port
  checkedSet "set", cnx, id & ",object_name", objname, "cannot set ACS name"
  ' ... the cache
  checkedSet "set", cnx, id & ",is_cache_acs", "F", "cannot set cache mode"
  checkedSet "set", cnx, id & ",server_major_version", "2", "cannot set server major version"
  checkedSet "set", cnx, id & ",server_major_version", "3", "cannot set server minor version"
  checkedSet "set", cnx, id & ",svr_config_id", serverId, "cannot set related server config id"
+ checkedSet "set", cnx, id & ",config_type", "1", "cannot set related config type"
+ checkedSet "set", cnx, id & ",acs_rw_capability", "3", "cannot set related capability"
 
  ' resets the supported store types
  checkedExec "truncate", cnx, id & ",supported_store_types", "cannot reset supported store types"
@@ -521,7 +552,7 @@ Function getJMSConfig (_
     dmAPIGet("get," & cnx & "," & col & ",r_object_id") & ")"
    Error 1083
   End If
-  printInfo "found JMS config '" & cfgname & "' (" & id & ")"
+  printInfo "found JMS config '" & jmsname & "' (" & id & ") for config '" & cfgname & "'"
  End If
  getJMSConfig = id
 
@@ -636,7 +667,7 @@ Function createJMSConfig (_
   "cannot retrieve current docbase name")
 
  ' set the object_name
- objname = "JMS " & host & ":" & jmsport & " for " & docbase & "." & cfgname
+ objname = "JMS:" & docbase & "." & cfgname & "@" & host & ":" & jmsport
  checkedSet "set", cnx, id & ",object_name", objname, "cannot set JMS name"
  ' reset the server_config_id
  checkedExec "truncate", cnx, id & ",server_config_id", "cannot reset server_config_id"
@@ -713,7 +744,7 @@ Public Sub configure ( _
  checkedExec "begintran", cnx, "", "cannot begin transaction"
 
  ' get appropriate server
- serverId = getServer (cnx, cfgname, True)
+ serverId = getServer (cnx, cfgname, host, jmsport, True)
  ' get appropriate jms
  jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, True)
  ' get appropriate acs config
@@ -722,7 +753,7 @@ Public Sub configure ( _
   checkedExec "commit", cnx, "", "cannot commit transaction"
  Else
   ' just checks whether thing would be ok:
-  serverId =  getServer (cnx, cfgname, False)
+  serverId =  getServer (cnx, cfgname, host, jmsport, False)
   jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, False)
   acsid = getACSConfig (cnx, serverId, cfgname, host, acsport, False)
   printLog "{config: """ & serverId & """,jms: """ & jmsid & """, acs: """ & acsid & """}"
@@ -774,7 +805,7 @@ Public Sub check ( _
 
  ' get appropriate server
  printInfo "checking the server configuration"
- serverId =  getServer (cnx, cfgname, False)
+ serverId =  getServer (cnx, cfgname, host, jmsport, False)
 
  ' get appropriate jms
  jmsid = getJMSConfig (cnx, serverId, cfgname, host, jmsport, newbrokerport, False)
