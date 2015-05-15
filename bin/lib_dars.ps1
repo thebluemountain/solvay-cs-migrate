@@ -37,7 +37,7 @@ function BuildDars ($conf, $name)
     if (0 -eq $dars.length)
     {
      # don't go any further
-     Log-Info 'there is no DAR to install for step ''' + $this.name + ''''
+     Log-Info 'there is no DAR to install for step ' + $this.name
      return
     }
 

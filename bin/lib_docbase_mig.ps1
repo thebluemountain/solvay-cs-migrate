@@ -1282,6 +1282,8 @@ function Start-ContentServerServiceIf($Name)
     {
         Log-Info "Starting Content Server service '$Name'. This may take a while..."
         Start-Service -InputObject $csService -ErrorAction Stop
+        # make sure the server has time to register self against the docbroker
+        Start-Sleep -s 5
         Log-Info "Content Server service '$Name' successfully started"
     }
     else

@@ -1449,12 +1449,15 @@ function checkDB ($obj, $action)
   }
   else
   {
-   [System.Int32]$acl = $table.rows[0].default_acl
-   if ((1 -ne $acl) -and (3 -ne $acl))
+   if ($action -ne 'installha')
    {
-    throw 'unexpected default acl (' + $acl + ') found in database ' + 
-     'for server configuration ' + $obj.resolve('docbase.config') + 
-     ': expected 1 (folder) or 3 (user)'
+    [System.Int32]$acl = $table.rows[0].default_acl
+    if ((1 -ne $acl) -and (3 -ne $acl))
+    {
+     throw 'unexpected default acl (' + $acl + ') found in database ' + 
+      'for server configuration ' + $obj.resolve('docbase.config') + 
+      ': expected 1 (folder) or 3 (user)'
+    }
    }
    # TODO: possibly type could be supported ... 
    # provided the dm_sysobject has valid default acl
