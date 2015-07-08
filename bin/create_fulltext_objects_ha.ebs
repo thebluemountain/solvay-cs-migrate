@@ -1,0 +1,1485 @@
+'  --------------------------------------------------
+'    The create_fulltext_objects script, located in $DM_HOME/install/admin directory.
+'    The docbaseUserName argument passed to this script is assumed to be an administrator
+'
+'    create dm_fulltext_admin dm_group object
+'    add the docbaseUserName to the dm_fulltext_admin group
+'
+'    create a dm_fulltext_admin_acl object
+'    add the dm_fulltext_admin group with DELETE permission
+'    add dm_world with READ permission
+
+'    create the dm_ftengine_config type if it doesn't already exist.
+'    set acl_name to dm_fulltext_admin_acl and acl_domain to docbaseUserName
+'
+'    create dm_ftindex_agent_config type
+'
+'    create a dm_fulltext_index object with index_name set to <docbase_name>_ftindex_01
+'
+'    Generated 7/26/2004
+'    Copyright Documentum, Inc. 2004
+'    function install(docbaseName As String, _    docbase name
+'    docbaseUserName As String, _          install owner account
+'    docbaseUserPassword As String, _      install owner account password
+'    FTEngineHome As String, _             fulltext engine home ($DOCUMENTUM)/fulltext/fast
+'  --------------------------------------------------
+
+Declare Function CreateVerifyFulltextAdminGroup(session As String, docbaseUser As String) As Integer
+Declare Function CreateVerifyFulltextAdminACL(session As String, docbaseUser As String) As Integer
+Declare Function CreateVerifyFTEngineConfigType(session As String) As Integer
+Declare Function CreateVerifyFTCollectionType(session As String) As Integer
+Declare Function CreateVerifyFTIndexAgentConfigType(session As String) As Integer
+Declare Function CreateVerifyDmUserObject(session As String, userName As String) As Integer
+
+Declare Function CreateVerifyUserRegistration(session As String, docbaseName as String) As Integer
+Declare Function CreateJavaMethod(MethodName As String, MethodVerb As String, LaunchAsyn As Boolean, _
+                 TimeoutMin As Long, TimeoutMax As Long, TimeoutDef As Long, UseMethodServer As Boolean, _
+                 JmsLocation As String)
+Declare Function dmNow(inDate as date) As String
+Declare Function CreateJob(DocbaseName As String, UserName As String, JobName As String, _
+                 Subject As String, RunMode As Integer, RunInterval As Integer, _
+                 RunTime0 As String, IsInactive As Boolean)
+Declare Function SetQueueItemsTableVolatileForDB2() as Integer
+Declare Function GetResultsFromSelectQuery(ByVal session as String, ByVal queryString as String) As String
+Declare Function AddUserToDataCenterManagersGroup(session As String, userName As String) As Integer
+
+function install(docbaseName As String, _
+		 docbaseUserName As String, _
+		 docbaseUserPassword As String)
+Dim SessionID As String
+Dim status As Integer
+Dim sErrMsg As String
+Dim buff As String
+Dim OneObject As String
+Dim oneID As String
+Dim coll As String
+
+    SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+    If SessionID ="" Then
+        Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+        DmExit(-1)
+    Else
+        Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    End If
+
+    status = CreateVerifyFulltextAdminGroup(SessionID,docbaseUserName)
+    If status <> 1 Then
+	Print "Create/Verify Fulltext Admin Group failed."
+	DmExit(-1)
+    Else
+	print "Created/Verified Fulltext Admin Group object successfully."
+    End If
+    
+    status = CreateVerifyFulltextAdminACL(SessionID,docbaseUserName)
+    If status <> 1 Then
+	Print "Create/Verify Fulltext Admin ACL object failed."
+ 	DmExit(-1)
+    Else
+	Print "Created/Verified Fulltext Admin ACL object successfully."
+    End If
+
+    status = CreateVerifyDmUserObject(SessionID, "dm_fulltext_index_user")
+    If status <> 1 Then
+	Print "Create/Verify dm_user object failed."
+ 	DmExit(-1)
+    Else
+	Print "Created/Verified dm_user object successfully."
+    End If
+
+    status = CreateVerifyFTEngineConfigType(SessionID)
+    If status <> 1 Then
+	Print "Create/Verify FT Engine Config Type failed."
+	DmExit(-1)
+    Else
+	Print "Created/Verified FT Engine Config Type successfully."
+    End If
+
+    status = CreateVerifyFTIndexAgentConfigType(SessionID)
+    If status <> 1 Then
+	Print "Create/Verify Fulltext Index Agent Config Type failed."
+	DmExit(-1)
+    Else
+	Print "Created/Verified Fulltext Index Agent Config Type successfully."	
+    End If
+
+    status = CreateVerifyFTCollectionType(SessionID)
+    If status <> 1 Then
+	Print "Create/Verify Fulltext Index Collection Type failed."
+	DmExit(-1)
+    Else
+	Print "Created/Verified Fulltext Index Collection Type successfully."	
+    End If
+
+    status = CreateVerifyUserRegistration(SessionID, docbaseName)
+
+    If status <> 1 Then
+	Print "Create/Verify Fulltext Index User Registration failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify Fulltext Index User Registration succeeded."
+    End If
+
+
+    status = CreateJavaMethod("dm_FTCreateEvents", _
+                        "com.documentum.server.impl.method.fulltext.migration.FTCreateEventsJob", _
+                        false, 30, 604800, 604800, true, "JMS_LOCATION=ANY")
+    If status <> 1 Then
+	Print "Create/Verify dm_method dm_FTCreateEVents failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify dm_method object dm_FTCreateEvents succeeded."
+    End If
+
+
+    status = CreateJob(docbaseName, _
+                         docbaseUserName, _
+                         "dm_FTCreateEvents", _
+                         "Creates events for objects created/modified in between an IndexAgent migration and a complete upgrade", _
+                         3, _
+                         1, _
+                         "23:00", _
+			 false)
+    If status <> 1 Then
+	Print "Create/Verify dm_job dm_FTCreateEVents failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify dm_job object dm_FTCreateEvents succeeded."
+    End If
+
+    status = createJavaMethod("dm_FTIndexAgentBoot", _
+                        "java com.documentum.server.impl.method.fulltext.startup.FTIndexAgentBoot", _
+                        false, 30, 604800, 604800, false, "JMS_LOCATION=ANY")
+    If status <> 1 Then
+	Print "Create/Verify dm_method  dm_FTIndexAgentBoot failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify dm_method object dm_FTIndexAgentBoot succeeded."
+    End If
+
+    status = CreateJob(docbaseName, _
+                         docbaseUserName, _
+                         "dm_FTIndexAgentBoot", _
+                         "Boot Index Agents", _
+                         3, _
+                         1, _
+                         "23:00", _
+			 true)
+    If status <> 1 Then
+	Print "Create/Verify dm_job dm_FTIndexAgentBoot failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify dm_job object dm_FTIndexAgentBoot succeeded."
+    End If
+
+    status = CreateIndexAgentAcquireLock
+    If status <> 1 Then
+	Print "Create/Verify dm_sysobject dm_indexAgentAcquireLock failed."
+	DmExit(-1)
+    Else
+	Print "Create/Verify dm_sysobject dm_indexAgentAcquireLock succeeded."
+    End If
+
+    '
+    'Because the next operation is conditional on the DBMS we print our
+    'indication of what happended inside the function.
+    status = SetQueueItemsTableVolatileForDB2()
+    If status <> 1 Then
+        DmExit(-1)
+    End If
+End function 
+
+
+Function CreateVerifyFulltextAdminGroup(session As String, docbaseUser As String) As Integer
+
+Dim status As Integer
+Dim ObjectID As String
+
+ObjectID = dmAPIGet("retrieve,c,dm_group where group_name='dm_fulltext_admin'")
+If ObjectID="" Then
+
+    Print "Create dm_group object"
+    ObjectID = dmAPIGet("create,c,dm_group")
+    status=dmAPISet("set,c,l,group_name", "dm_fulltext_admin")
+    status=dmAPISet("set,c,l,description", "Group for users who can modify Fulltext Configuration objects")
+    status=dmAPISet("append,c,l,users_names", docbaseUser)
+ 
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+	CreateVerifyFulltextAdminGroup = 0
+        Exit Function
+    End If
+
+    status=dmAPIExec("save,c,l")
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+        CreateVerifyFulltextAdminGroup = 0
+	Exit Function
+    End If
+Else
+    Print "dm_group object dm_fulltext_admin already exists."
+End If
+
+    CreateVerifyFulltextAdminGroup = 1
+
+End Function
+
+
+
+Function CreateVerifyFulltextAdminACL(session As String, docbaseUser As String) As Integer
+
+Dim status As Integer
+Dim ObjectID As String
+Dim buff As String
+
+buff = "retrieve,c,dm_acl where object_name = 'dm_fulltext_admin_acl' and owner_name = '" & docbaseUser & "'"
+
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Create dm_acl object"
+    ObjectID = dmAPIGet("create,c,dm_acl")
+    status=dmAPISet("set,c,l,object_name", "dm_fulltext_admin_acl")
+    status=dmAPISet("set,c,l,owner_name", docbaseUser)
+    status=dmAPISet("set,c,l,acl_class",3)
+    status=dmAPIExec("grant,c,l,dm_owner,7")
+    status=dmAPIExec("grant,c,l,dm_fulltext_admin,7")
+    status=dmAPIExec("grant,c,l,dm_world,3")
+ 
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+	CreateVerifyFulltextAdminACL = 0
+        Exit Function
+    End If
+
+    status=dmAPIExec("save,c,l")
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+        CreateVerifyFulltextAdminACL = 0
+	Exit Function
+    End If
+Else
+   Print "dm_fulltext_admin_acl object exists."
+End If
+
+   CreateVerifyFulltextAdminACL = 1
+End Function
+
+Function CreateVerifyFTEngineConfigType(session As String) As Integer
+Dim status As Integer
+Dim ObjectID As String
+Dim buff As String
+Dim cmd  As String
+Dim QueryID As String
+Dim mesg As String
+
+buff = "retrieve,c,dm_type where name = 'dm_ftengine_config'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Create dm_ftengine_config type"
+
+    QueryID = dmAPIGet("query,c,CREATE TYPE dm_ftengine_config (param_name char(64) repeating, " &_
+    "param_value char(255) repeating, ft_collection_id id repeating, ftsearch_security_mode integer) " &_
+    "with supertype dm_sysobject")
+
+    If QueryID<>"" Then
+        status=dmAPIExec("close,c," & QueryID)
+    Else
+        Print dmAPIGet("getmessage,c")
+	    CreateVerifyFTEngineConfigType = 0
+	    Exit Function
+    End If
+Else
+   Print "dm_ftengine_config type exists."
+   cmd = buff & " and ANY attr_name='ft_collection_id'"
+   ObjectID = dmAPIGet(cmd)
+   If ObjectID = "" Then
+      mesg = dmAPIGet("getmessage,c")
+      If InStr(mesg, "DM_API_E_NO_MATCH") <= 0 Then
+          Print mesg
+          CreateVerifyFTEngineConfigType = 0
+          Exit Function
+      End If
+      QueryID = dmAPIGet("query,c,EXECUTE ALLOW_BASE_TYPE_CHANGES WITH ALLOW_CHANGE_FLAG=1")
+      If QueryID = ""  Then
+          Print dmAPIGet("getmessage,c")
+          Print "Failed to enable docbase to allow altering dm_ftengine_config type."
+          CreateVerifyFTEngineConfigType = 0
+          Exit Function
+      Else
+          status=dmAPIExec("close,c," & QueryID)
+      End If
+      Print "Adding ft_collection_id repeating attribute to dm_ftengine_config type."
+      QueryID = dmAPIGet("query,c,ALTER TYPE dm_ftengine_config ADD ft_collection_id id repeating")
+      If QueryID<>"" Then
+          status=dmAPIExec("close,c," & QueryID)
+      Else
+          Print dmAPIGet("getmessage,c")
+	      CreateVerifyFTEngineConfigType = 0
+	      Exit Function
+      End If
+   End If
+   
+   cmd = buff & " and ANY attr_name='ftsearch_security_mode'"
+   ObjectID = dmAPIGet(cmd)
+   If ObjectID = "" Then
+      mesg = dmAPIGet("getmessage,c")
+      If InStr(mesg, "DM_API_E_NO_MATCH") <= 0 Then
+          Print mesg
+          CreateVerifyFTEngineConfigType = 0
+          Exit Function
+      End If
+      QueryID = dmAPIGet("query,c,EXECUTE ALLOW_BASE_TYPE_CHANGES WITH ALLOW_CHANGE_FLAG=1")
+      If QueryID = ""  Then
+          Print dmAPIGet("getmessage,c")
+          Print "Failed to enable docbase to allow altering dm_ftengine_config type."
+          CreateVerifyFTEngineConfigType = 0
+          Exit Function
+      Else
+          status=dmAPIExec("close,c," & QueryID)
+      End If
+      Print "Adding ftsearch_security_mode single value attribute to dm_ftengine_config type."
+      QueryID = dmAPIGet("query,c,ALTER TYPE dm_ftengine_config ADD ftsearch_security_mode integer")
+      If QueryID<>"" Then
+          status=dmAPIExec("close,c," & QueryID)
+      Else
+          Print dmAPIGet("getmessage,c")
+	      CreateVerifyFTEngineConfigType = 0
+	      Exit Function
+      End If
+   End If
+End If
+
+   CreateVerifyFTEngineConfigType = 1
+End Function
+
+Sub IncreaseAttributeLength(DocbaseTypeName As String, _
+                            AttrName As String, _
+                            NewLength As Integer)
+  Dim QueryID as String
+  Dim status As Integer
+  Dim type_id As String
+  Dim current_len As Integer
+  
+  'Check the current attribute length
+  type_id = dmAPIGet("retrieve,c,dm_type where name = '" & DocbaseTypeName & "'")
+  If (type_id = "") Then
+    Print "Type " & DocbaseTypeName & " does not exist"
+    dmExit(-1)    
+  End If
+  
+  index$ = dmAPIGet("locate,c," & type_id & ",attr_name," & AttrName)
+  If (index = "-1") Then
+    Print "Type " & DocbaseTypeName & " does not have attribute " & AttrName
+    dmExit(-1)
+  End If
+  
+  current_len = dmAPIGet("get,c," & type_id & ",attr_length[" & index & "]")
+  If (current_len = NewLength) Then
+    Print "No need to increase the length of attribute " & AttrName & " for type " & DocbaseTypeName
+  Else
+    QueryID = dmAPIGet("query,c,EXECUTE ALLOW_BASE_TYPE_CHANGES WITH ALLOW_CHANGE_FLAG=1")
+    If QueryID = ""  Then
+      Print dmAPIGet("getmessage,c")
+      Print "Failed to enable docbase to allow altering " & DocbaseTypeName & " type."
+      dmExit(-1)
+    Else
+      status=dmAPIExec("close,c," & QueryID)
+    End If
+    Print "Increase the length of attribute " & AttrName & " for type " & DocbaseTypeName
+    QueryID = dmAPIGet("query,c,alter type " & DocbaseTypeName & " modify " & AttrName & " char(" & NewLength & ")")
+    If  (QueryID = "")  Then
+      Print dmAPIGet("getmessage,c")
+      Print "ERROR: Increase attribute length of type " & DocbaseTypeName & " failed"
+      dmExit(-1)
+    Else
+      status = dmAPIExec("next,c," & QueryID)
+      status = dmAPIExec("close,c," & QueryID)
+    End If                    
+  End If
+                  
+End Sub
+
+Function CreateVerifyFTIndexAgentConfigType(session As String) As Integer
+
+Dim status As Integer
+Dim ObjectID As String
+Dim buff As String
+Dim QueryID As String
+
+buff = "retrieve,c,dm_type where name = 'dm_ftindex_agent_config'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Create dm_ftindex_agent_config type"
+
+    QueryID = dmAPIGet("query,c,CREATE TYPE dm_ftindex_agent_config ( " &_
+		"index_name char(64),queue_user char(255)," &_
+		"r_start_time time,r_stop_time time,r_fail_time time," &_
+		"r_is_active integer,shut_down_requested integer,force_inactive integer," &_
+		"r_last_work_time time,r_last_done_time time," &_
+                "exporter_thread_count integer,checkpoint_interval integer," &_
+		"connectors_batch_size integer,docbase_connector_wait_time integer," &_
+		"active_connectors char(32),save_queue_items integer," &_
+		"runaway_item_timeout integer," &_
+		"exporter_queue_threshold integer,indexer_queue_threshold integer" &_
+		") with supertype dm_sysobject")
+
+    If QueryID<>"" Then
+        status=dmAPIExec("close,c," & QueryID)
+    Else
+        Print dmAPIGet("getmessage,c")
+	CreateVerifyFTIndexAgentConfigType= 0
+	Exit Function
+    End If
+Else
+   ' Modify dm_ftindex_agent_config.queue_user to char(255)
+   Call IncreaseAttributeLength("dm_ftindex_agent_config", "queue_user", 255)        
+   Print "dm_ftindex_agent_config type exists."
+End If
+
+   CreateVerifyFTIndexAgentConfigType = 1
+End Function
+
+Function CreateVerifyDmUserObject(session As String, userName As String) As Integer
+
+Dim status As Integer
+Dim ObjectID As String
+Dim buff As String
+
+buff = "retrieve,c,dm_user where user_name = '" & userName & "'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+   ObjectID = dmAPIGet("create,c,dm_user")
+   status = dmAPISet("set,c,l,user_name",userName)
+   status = dmAPISet("set,c,l,user_login_name",userName)
+   status = dmAPISet("set,c,l,user_privileges",16)
+
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+	CreateVerifyDmUserObject= 0
+        Exit Function
+    End If
+
+    status=dmAPIExec("save,c,l")
+    If status = 0 Then
+        Print dmAPIGet("getmessage,c")
+        CreateVerifyDmUserObject= 0
+	Exit Function
+    End If
+Else
+
+    Print "dm_user object " & userName & " already exists"
+
+End If
+
+status = AddUserToDataCenterManagersGroup(session, userName)
+If status <> 1 Then
+    Print "Failed to add/verify Fulltext user to Data Center Managers group."
+Else
+    Print "Created/Verified Fulltext user to Data Center Managers group successfully."
+End If
+
+CreateVerifyDmUserObject = 1
+
+End Function
+
+Function AddUserToDataCenterManagersGroup(session As String, userName As String) As Integer
+
+Dim ObjectID As String
+Dim status As Integer
+
+ObjectID = dmAPIGet("retrieve,c,dm_group where group_name='dm_datacenter_managers'")
+
+If ObjectID="" Then
+    Print "Group dm_datacenter_managers doesn't exists hence " & userName & " is not added as a member of this group"
+    AddUserToDataCenterManagerGroup = 0
+    Exit Function
+
+Else
+    idx$ = dmAPIGet("locate,c," & ObjectID & ",users_names," & userName)
+    If idx$ = "-1" Then
+       Print "Adding " & userName & " as a member of dm_datacenter_managers group"
+       status=dmAPISet("append,c," & ObjectID & ",users_names,",userName)
+       status=dmAPIExec("save,c," & ObjectID)
+       If status = 0 Then
+          Print dmAPIGet("getmessage,c")
+          Print "Failed to add " & userName & " to dm_datacenter_managers group"
+          AddUserToDataCenterManagerGroup = 0
+          Exit Function
+       End If
+    Else
+       Print userName & " is already member of dm_datacenter_managers group" 
+    End If
+End If
+AddUserToDataCenterManagersGroup = 1
+
+End Function 
+
+Function FindTypeID(SessionID As String, _
+                    dctmTypeName As String) As String
+
+Dim buff As String
+Dim ObjectID As String
+
+buff = "retrieve," & SessionID & ",dm_type where name = '" & dctmTypeName & "'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Failed to fetch type " & dctmTypeName & "."
+    FindTypeID = ""
+    Exit Function
+End If
+
+FindTypeID = ObjectID
+
+End Function
+
+Function CreateVerifySingleRegistration(session As String, _
+        typeID As String, _
+        eventName As String) As Integer
+
+Dim status As Integer
+Dim buff As String
+
+CreateVerifySingleRegistration = 0
+
+buff = "register," & session & "," & typeID & "," & eventName & ",,F,"
+status = dmAPISet(buff,"")
+If status = 0 Then
+    errorMsg= dmAPIGet("getmessage,c")
+    charIndex = InStr(1, errorMsg, "DM_EVENT_E_EVENT_ALREADY_REGISTERED", 1)
+    If charIndex = 0 Then
+        Print errorMsg
+        CreateVerifySingleRegistration = 0
+        Exit Function
+    End If
+End If
+
+CreateVerifySingleRegistration = 1
+
+End Function
+
+Function CreateVerifyUserRegistrationFull(session As String, _
+        docbaseName as String, _
+        userName As String, _
+        dctmTypeName As String) As Integer
+
+Dim status As Integer
+Dim ticket As String
+Dim buff As String
+Dim SessionID As String
+Dim ObjectID As String
+Dim errorMsg As String
+Dim charIndex As Integer
+Dim queryString As String
+Dim eventName As String
+
+buff = "getlogin,c," & userName
+ticket = dmAPIGet(buff)
+
+buff = "connect," & docbaseName & "," & userName & "," & ticket
+SessionID= dmAPIGet(buff)
+If SessionID ="" Then
+     Print "Failed to connect to docbase " & docbaseName &" as user " & userName & "."
+     CreateVerifyUserRegistrationFull = 0
+     Exit Function
+Else
+     Print "Connected to docbase " & docbaseName &" as user " & userName & "."
+End If
+
+ObjectID = FindTypeID(SessionID, dctmTypeName)
+If ObjectID = "" Then
+    CreateVerifyUserRegistrationFull = 0
+    Exit Function
+End If
+
+'registering the events for the new user (dm_fulltext_index_user_01) based on the types and events registered for dm_fulltext_index_user
+queryString$ = "select r_object_id,event from dmi_registry where user_name = 'dm_fulltext_index_user' and registered_id = '" & ObjectID & "' order by r_object_id"
+collection = dmAPIGet("query," & SessionID & "," & queryString)
+If collection = "" Then
+    Print "There is no event registered for dm_fulltext_index_user for type " & dctmTypeName & "."
+    Exit Function
+End If
+status = dmAPIExec("next," & SessionID & "," & collection)
+If status = 0 Then
+    Exit Function
+End If
+eventName$ = dmAPIGet("get," & SessionID & "," & collection & ", event")
+Do While Not (eventName$ = "" ) 
+    status = CreateVerifySingleRegistration(SessionID, ObjectID, eventName)
+    If status = 0 Then
+        CreateVerifyUserRegistrationFull = 0
+        Exit Function
+    End If
+    collStatus = dmAPIExec("next," & SessionID & "," & collection)
+    If collStatus = 0 Then
+    	Goto Finish
+    End If
+    eventName$ = dmAPIGet("get," & SessionID & "," & collection & ", event")
+Loop
+Finish:
+   collStatus = dmAPIExec("close," & SessionID & "," & collection)
+
+CreateVerifyUserRegistrationFull = 1
+
+End Function
+
+Function CreateVerifyUserRegistration(session As String, docbaseName as String) As Integer
+
+Dim userName As String
+Dim dctmTypeName As String
+
+userName = "dm_fulltext_index_user"
+dctmTypeName = "dm_sysobject"
+
+CreateVerifyUserRegistration = CreateVerifyUserRegistrationFull(session, docbaseName, _
+   userName, dctmTypeName)
+
+End Function   
+
+Function CreateIndexAgentAcquireLock as Integer
+  Dim ObjectID as String
+  Dim status As Integer
+  Dim sErrMsg As String
+
+  ObjectID = dmAPIGet("retrieve,c,dm_sysobject where object_name='dm_indexAgentAcquireLock'")
+  If ObjectID="" Then
+	sErrMsg = dmAPIGet("getmessage,c")
+    Print "Creating sysobject 'dm_indexAgentAcquireLock'"
+    ObjectID = dmAPIGet("create,c,dm_sysobject")
+    status=dmAPISet("set,c,l,object_name", "dm_indexAgentAcquireLock")
+    status=dmAPISet("set,c,l,a_special_app", "1.0.0")
+    status=dmAPISet("set,c,l,acl_domain", "dm_dbo")
+    status=dmAPISet("set,c,l,acl_name", "dm_acl_superusers" )
+
+    status=dmAPIExec("save,c,l")
+    If status = 0 Then
+      Print dmAPIGet("getmessage,c")
+      Print "Failed to create sysobject 'dm_indexAgentAcquireLock'"
+      CreateIndexAgentAcquireLock = 0
+      Exit Function
+    End If
+  Else
+    Print "Method 'dm_indexAgentAcquireLock' already exists"
+  End If
+
+  CreateIndexAgentAcquireLock = 1  
+End Function
+
+Function CreateJavaMethod(MethodName As String, _
+                     MethodVerb As String, _
+                     LaunchAsyn As Boolean, _
+                     TimeoutMin As Long, _
+                     TimeoutMax As Long, _
+                     TimeoutDef As Long, _
+                     UseMethodServer As Boolean, _
+                     JmsLocation As String)
+
+  Dim ObjectID as String
+  Dim status As Integer
+  Dim sErrMsg As String
+
+  ObjectID = dmAPIGet("retrieve,c,dm_method where object_name='" & MethodName & "'")
+  If ObjectID="" Then
+	sErrMsg = dmAPIGet("getmessage,c")
+    Print "Creating method '" & MethodName & "'"
+    ObjectID = dmAPIGet("create,c,dm_method")
+    status=dmAPISet("set,c,l,object_name", MethodName)
+    status=dmAPISet("set,c,l,method_verb", MethodVerb)
+    status=dmAPISet("set,c,l,method_type", "java")                    
+    status=dmAPISet("set,c,l,run_as_server","T")
+    status=dmAPISet("set,c,l,use_method_server",UseMethodServer)
+    status=dmAPISet("set,c,l,launch_async", LaunchAsyn)
+    status=dmAPISet("set,c,l,timeout_min", TimeoutMin)
+    status=dmAPISet("set,c,l,timeout_max", TimeoutMax)
+    status=dmAPISet("set,c,l,timeout_default", TimeoutDef)
+    status=dmAPISet("set,c,l,a_special_app", "1.0.0")
+    status=dmAPISet("set,c,l,acl_domain", "dm_dbo")
+    status=dmAPISet("set,c,l,acl_name", "dm_acl_superusers" )
+
+    If Not (JmsLocation = "") Then
+      status=dmAPISet("set,c,l,a_extended_properties[0]", JmsLocation)
+    End If
+
+    status=dmAPIExec("save,c,l")
+    If status = 0 Then
+      Print dmAPIGet("getmessage,c")
+      Print "Failed to create method '" & MethodName & "'"
+      CreateJavaMethod = 0
+      Exit Function
+    End If
+  Else
+    Print "Method '" & MethodName & "' already exists"
+    If Not (JmsLocation = "") Then
+      idx$ = dmAPIGet("locate,c," & ObjectID & ",a_extended_properties," & JmsLocation)
+      If idx$ = "-1" Then
+        Print "Assign " & JmsLocation & " to a_extended_properties in method object " & MethodName
+        status=dmAPISet("append,c," & ObjectID & ",a_extended_properties",JmsLocation)
+        status=dmAPIExec("save,c," & ObjectID)
+        If status = 0 Then
+          Print dmAPIGet("getmessage,c")
+          Print "Failed to update dm_method object " & MethodName
+          DmExit(-1)
+        End If
+      End If
+    End If
+  End If
+
+  CreateJavaMethod = 1  
+End Function
+
+
+Function dmNow(inDate as date) As string
+  dim theMonth as string, theDay as string, theYear as string, theTime as string
+  dim dSep as string
+  dim f2Digits As string
+  
+  theFormat = dmAPIGet("get,c,sessionconfig,r_date_format")
+  theMonth = Format$(datepart("m", inDate))
+  theDay = Format$(datepart("d", inDate))
+  theYear = Format$(datepart("yyyy", inDate))
+  theTime = Format$(inDate, "hh") & ":" & Format$(inDate, "nn") & ":" & Format$(inDate, "ss")
+  f2Digits = mid$(theFormat, 1, 2) 
+  Select Case f2Digits
+  Case "12", "31", "95"
+    dSep = mid$(theFormat, 3, 1)
+  Case Else
+    dSep = mid$(theFormat, 5, 1)
+  End Select
+  If f2Digits = "31" Then
+    dmNow = theDay & dSep & theMonth & dSep & theYear & " " & theTime
+  ElseIf f2Digits = "12" Then
+    dmNow = theMonth & dSep & theDay & dSep & theYear & " " & theTime
+  else 
+    dmNow = theYear & dSep & theMonth & dSep & theDay & " " & theTime
+  End If
+End Function
+
+
+Function CreateJob(DocbaseName As String, _
+                      UserName As String, _
+                      JobName As String, _
+                      Subject As String, _
+                      RunMode As Integer, _
+                      RunInterval As Integer, _
+                      RunTime0 As String , _
+                      IsInactive As Boolean)
+   Dim RunTime As String
+   Dim ObjectID as String
+   Dim status As Integer
+   Dim sErrMsg As String
+
+   ObjectID = dmAPIGet("retrieve,c,dm_job where object_name = '" & JobName & "'")
+   If ObjectID = "" Then
+      Print "Creating job '"  & JobName & "'"
+      sErrMsg = dmAPIGet("getmessage,c")
+      ObjectID = dmAPIGet("create,c,dm_job")
+      Status = dmAPISet("set,c,l,object_name", JobName)
+      Status = dmAPISet("set,c,l,subject", Subject)
+      Status = dmAPISet("set,c,l,method_name", JobName)    
+      
+      RunTime = dmNow(date & " " & RunTime0 & ":00")
+      Status = dmAPISet("set,c,l,start_date", RunTime)
+      Status = dmAPISet("set,c,l,a_next_invocation", RunTime)
+      
+      exp_date$ = dmNow(DateAdd("yyyy",8, RunTime))
+      Status = dmAPISet("set,c,l,expiration_date", exp_date$)
+      Status = dmAPISet("set,c,l,pass_standard_arguments", "T")
+      Status = dmAPISet("set,c,l,method_trace_level", "0")
+      Status = dmAPISet("set,c,l,run_mode", RunMode)
+      Status = dmAPISet("set,c,l,run_interval", RunInterval)
+      Status = dmAPISet("set,c,l,is_inactive", IsInactive)
+      Status = dmAPISet("set,c,l,title", "Fulltext")
+      Status = dmAPISet("set,c,l,acl_domain", "dm_dbo")
+      Status = dmAPISet("set,c,l,acl_name", "dm_acl_superusers")
+      Status = dmAPIExec("link,c,l,/System/Sysadmin/Jobs")
+      Status = dmAPISet("append,c,l,method_arguments", "-window_interval 12000")
+      Status = dmAPISet("append,c,l,method_arguments", "-queueperson " & UserName)
+      Status = dmAPISet("append,c,l,method_arguments", "-max_events_per_run 50000")
+
+      TargetServer$ = DocbaseName & "." & dmAPIGet("get,c,serverconfig,object_name") & "@" & dmAPIGet("get,c,serverconfig,r_host_name")
+      Status = dmAPISet("set,c,l,target_server", TargetServer$)
+
+      Status = dmAPIExec("save,c,l")
+      If Status = 0 Then
+        Print dmAPIGet("getmessage,c")
+        Print "Failed to create job '"  & JobName & "'"
+        CreateJob = 0
+        Exit Function
+      End If
+   Else
+      Print "Job '" & JobName & "' already exists"
+   End If
+   
+   CreateJob = 1
+End Function
+
+Function SetQueueItemsTableVolatileForDB2() as Integer
+     DIM dbmsName as String
+     Dim status As Integer
+
+     dbmsName = dmAPIGet("get,c,docbaseconfig,r_dbms_name")
+     if(dbmsName = "DB2") then
+        status = dmAPIExec("execsql,c,alter table dmi_queue_item_s volatile")
+        If Status = 0 Then
+            Print dmAPIGet("getmessage,c")
+            Print "Failed to execute 'alter table dmi_queue_items_s volatile'"
+            SetQueueItemsTableVolatileForDB2 = 0
+            Exit Function
+        End If
+        Print "Execution of 'alter table dmi_queue_items_s volatile' succeeded."
+     Else
+        Print "Skipping 'alter table dmi_queue_items_s volatile' for " & dbmsName
+     End If         
+     SetQueueItemsTableVolatileForDB2 = 1
+End Function
+
+Function SingleUnRegistration(session As String, _
+        typeID As String, _
+        eventName As String, _
+        userName As String) As Integer
+
+Dim status As Integer
+Dim buff As String
+Dim sErrMsg As String
+
+SingleUnRegistration = 0
+
+buff = "unregister," & session & "," & typeID & "," & eventName & "," & userName
+Print buff
+status = dmAPIExec(buff)
+If status = 0 Then
+    sErrMsg = dmAPIGet("getmessage,c")
+    charIndex = InStr(1, sErrMsg, "DM_EVENT_E_NOT_REGISTERED", 1)
+    If charIndex = 0 Then
+        Print errorMsg
+        SingleUnRegistration = 0
+        Exit Function
+    End If
+End If
+
+SingleUnRegistration = 1
+
+End Function
+
+Function DoUnRegister(SessionID As String, _
+                      dctmTypeName As String, _
+                      userName As String) As Integer
+
+Dim status As Integer
+Dim buff As String
+Dim ObjectID As String
+
+ObjectID = FindTypeID(SessionID, dctmTypeName)
+If ObjectID = "" Then
+    DoUnRegister = 0
+    Exit Function
+End If
+
+status = SingleUnRegistration(SessionID, ObjectID, "dm_save", userName)
+If status = 0 Then
+   DoUnRegister = 0
+   Exit Function
+End If
+
+status = SingleUnRegistration(SessionID, ObjectID, "dm_destroy", userName)
+If status = 0 Then
+   DoUnRegister = 0
+   Exit Function
+End If
+
+status = SingleUnRegistration(SessionID, ObjectID, "dm_readonlysave", userName)
+If status = 0 Then
+   DoUnRegister = 0
+   Exit Function
+End If
+
+status = SingleUnRegistration(SessionID, ObjectID, "dm_checkin", userName)
+If status = 0 Then
+   DoUnRegister = 0
+   Exit Function
+End If
+
+status = SingleUnRegistration(SessionID, ObjectID, "dm_move_content", userName)
+If status = 0 Then
+   DoUnRegister = 0
+   Exit Function
+End If
+
+DoUnRegister = 1
+
+End Function
+
+Function DoRegister(session As String, _
+                    docbaseName as String, _
+                    dctmTypeName As String, _
+                    userName As String) As Integer
+
+DoRegister = CreateVerifyUserRegistrationFull(session, docbaseName, _
+   userName, dctmTypeName)
+
+End Function
+
+Function unregister(docbaseName As String, _
+		    docbaseUserName As String, _
+  		    docbaseUserPassword As String, _
+  		    dctmTypeName As String, _
+                    regUserName As String)
+
+Dim SessionID As String
+Dim status As Integer
+Dim buff As String
+Dim ObjectID As String
+
+    SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+    If SessionID ="" Then
+        Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+        DmExit(-1)
+    Else
+        Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    End If
+
+    status = DoUnRegister(SessionID, dctmTypeName, regUserName)
+    If status <> 1 Then
+	Print "Unregister for type " & dctmTypeName & " and user " & _
+            regUserName  & " failed."
+	DmExit(-1)
+    Else
+	Print "Successfully unregistered for type " & dctmTypeName & " and user " & _
+            regUserName  & "."
+    End If
+    
+End Function
+
+Function register(docbaseName As String, _
+		  docbaseUserName As String, _
+  		  docbaseUserPassword As String, _
+  		  dctmTypeName As String, _
+                  regUserName As String)
+
+Dim SessionID As String
+Dim status As Integer
+Dim buff As String
+Dim ObjectID As String
+
+    SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+    If SessionID ="" Then
+        Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+        DmExit(-1)
+    Else
+        Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    End If
+
+    status = DoRegister(SessionID, docbaseName, dctmTypeName, regUserName)
+    If status <> 1 Then
+	Print "Register for type " & dctmTypeName & " and user " & _
+            regUserName  & " failed."
+	DmExit(-1)
+    Else
+	Print "Successfully registered for type " & dctmTypeName & " and user " & _
+            regUserName  & "."
+    End If
+    
+End Function
+
+Sub HAPreInstallStep (ByVal docbaseName As String, ByVal docbaseUserName As String, ByVal docbaseUserPassword As String)
+Dim SessionID As String
+Dim status As Integer
+
+	SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+	If SessionID ="" Then
+	    Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+	    DmExit(-1)
+	Else
+	    Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+	End If
+	
+        status = DoHAPreInstallStep(SessionID)
+End Sub
+
+Function FindStandardFulltextIndexObject(session As String, pattern As String) As String
+
+Dim ObjectID As String
+Dim buff As String
+
+ObjectID = ""
+
+buff = "retrieve,c,dm_fulltext_index where index_name like '"& pattern &"'"
+ObjectID = dmAPIGet(buff)
+
+FindStandardFulltextIndexObject = ObjectID
+
+End Function
+
+
+Function GetResultsFromSelectQuery(ByVal session as String, ByVal queryString as String) As String
+
+Dim status as Integer
+Dim collection as String
+Dim currentID as String
+Dim buffer as String
+    
+GetResultsFromSelectQuery = ""
+
+collection = dmAPIGet("query," & session & "," & queryString)
+If collection = "" Then
+   Exit Function
+End If
+
+status = dmAPIExec("next," & session & "," & collection)
+If status = 0 Then
+   Exit Function
+End If
+currentID$ = dmAPIGet("get," & session & "," & collection & ",r_object_id")
+    
+buffer = ""
+Do While Not (currentId$ = "" )
+  If (buffer$ = "") Then
+    buffer = "'" & currentID & "'"
+  Else
+    buffer = buffer & ", '" & currentID & "'"
+  End If 
+  status = dmAPIExec("next," & session & "," & collection)
+  If status = 0 Then
+    Goto Finish
+  End If
+  currentId$ = dmAPIGet("get," & session & "," & collection & ",r_object_id")
+Loop
+
+Finish:
+  status = dmAPIExec("close," & session & "," & collection)
+  GetResultsFromSelectQuery = buffer
+
+End Function 
+
+
+
+
+Function DoHAPreInstallStep(session As String) As Integer
+
+Dim status As Integer
+Dim ObjectID As String
+Dim OldIndexName As String
+Dim NewIndexName As String
+Dim buff As String
+Dim EngineConfigID As String 
+Dim EngineConfigName As String 
+Dim pattern As String
+
+status = 1
+
+pattern = "%_ftindex_01"
+ObjectID = FindStandardFulltextIndexObject(session, pattern)
+If ObjectID = "" Then
+    Print "Failed to find first dm_fulltext_index object whose name matches: " & pattern
+    DoHAPreInstallStep = 0
+    exit function
+End If
+
+EngineConfigID = dmAPIGet("get,c,l,ft_engine_id")
+
+OldIndexName = dmAPIGet("get,c,l,index_name")
+NewIndexName = Mid(OldIndexName, 1, len(OldIndexName)-2) & "00"
+
+buff = "execsql,c,update dm_fulltext_index_s set i_vstamp = i_vstamp+1, is_standby = 1, index_name = '" & NewIndexName & "' where index_name = '" & OldIndexName & "'"
+
+status=dmAPIExec(buff)
+If status = 0 Then
+    Print dmAPIGet("getmessage,c")
+    Print "Failed to exec sql to update index:"
+    Print buff
+    DoHAPreInstallStep = 0
+    exit function
+Else
+    Print "Updated previous dm_fulltext_index_object."
+    Print "Set name to " & NewIndexName & " and marked is_standby True"
+End If
+
+buff = "retrieve,c,dm_ftindex_agent_config where index_name = '" & OldIndexName & "'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Failed to find the old dm_ftindex_agent_config object"
+    DoHAPreInstallStep = 0
+    exit function
+End If
+
+status=dmAPISet("set,c," & ObjectID & ",index_name", NewIndexName)
+status=dmAPIExec("save,c," & ObjectID)
+If status = 0 Then
+    Print "Failed to save old ftindex agent config"
+    Print dmAPIGet("getmessage,c")
+    DoHAPreInstallStep = 0
+    exit function
+Else
+    Print "Updated previous dm_ftindex_agent_config object, set index_name to " & NewIndexName
+End If
+
+status=dmAPIExec("fetch,c," & EngineConfigID)
+If status = 0 Then
+    Print "Failed to fetch old ftengine config"
+    Print dmAPIGet("getmessage,c")
+    DoHAPreInstallStep = 0
+    exit function
+End If
+
+EngineConfigName = dmAPIGet("get,c," & EngineConfigID & ",object_name")
+NewEngineConfigName = EngineConfigName & " 00"
+status=dmAPISet("set,c," & EngineConfigID & ",object_name", NewEngineConfigName)
+status=dmAPIExec("save,c," & EngineConfigID)
+If status = 0 Then
+    Print "Failed to save old ftindex agent config"
+    Print dmAPIGet("getmessage,c")
+    DoHAPreInstallStep = 0
+    exit function
+Else
+    Print "Updated old dm_fulltext_engine_config object, set object_name to " & NewEngineConfigName
+End If
+
+DoHAPreInstallStep = 1
+
+End Function
+
+Function HAPostInstallStep(docbaseName As String, _
+		           docbaseUserName As String, _
+  		           docbaseUserPassword As String)
+
+Dim SessionID As String
+Dim status As Integer
+Dim buff As String
+Dim ObjectID As String
+Dim regUserName As String
+Dim dctmTypeName As String
+Dim pattern As String
+Dim queryString As String
+Dim typeName1 As String
+Dim typeId As String
+
+SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+If SessionID ="" Then
+    Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    DmExit(-1)
+Else
+    Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+End If
+
+pattern = "%_ftindex_01"
+ObjectID = FindStandardFulltextIndexObject(SessionID, pattern)
+If ObjectID = "" Then
+    Print "Failed to find new dm_fulltext_index object whose name matches: " & pattern
+    HAPostInstallStep = 0
+    exit function
+End If
+
+NewIndexName = dmAPIGet("get,c,l,index_name")    
+
+buff = "execsql,c,update dm_fulltext_index_s set i_vstamp = i_vstamp+1, is_standby = 1 where index_name = '" & NewIndexName & "'"
+status=dmAPIExec(buff)
+If status = 0 Then
+    Print dmAPIGet("getmessage,c")
+    Print "Failed to exec sql to update index:"
+    Print buff
+    HAPostInstallStep = 0
+    exit function
+Else
+    Print "Updated new dm_fulltext_index object, " & NewIndexName & ", set is_standby True"
+End If
+
+pattern = "%_ftindex_00"
+ObjectID = FindStandardFulltextIndexObject(SessionID, pattern)
+If ObjectID = "" Then
+    Print "Failed to find old dm_fulltext_index object whose name matches: " & pattern
+    HAPostInstallStep = 0
+    exit function
+End If
+
+OldIndexName = dmAPIGet("get,c,l,index_name")    
+buff = "execsql,c,update dm_fulltext_index_s set i_vstamp = i_vstamp+1, is_standby = 0 where index_name = '" & OldIndexName & "'"
+status=dmAPIExec(buff)
+If status = 0 Then
+    Print dmAPIGet("getmessage,c")
+    Print "Failed to exec sql to update index:"
+    Print buff
+    HAPostInstallStep = 0
+    exit function
+Else
+    Print "Updated new dm_fulltext_index object, " & OldIndexName & ", set is_standby False"
+End If
+
+regUserName = "dm_fulltext_index_user_01"
+
+buff = "retrieve,c,dm_ftindex_agent_config where index_name = '" & NewIndexName & "'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Can't find new dm_ftindex_agent_config object"
+    HAPostInstallStep = 0
+    exit function
+End If
+
+status=dmAPISet("set,c," & ObjectID & ",queue_user", regUserName)
+status=dmAPIExec("save,c," & ObjectID)
+If status = 0 Then
+    Print dmAPIGet("getmessage,c")
+    Print "Failed to save new ftindex agent config"
+    HAPostInstallStep = 0
+    exit function
+Else
+    Print "Updated new dm_ftindex_agent_config, set queue_user to " & regUserName
+End If
+    
+status = CreateVerifyDmUserObject(SessionID, regUserName)
+If status <> 1 Then
+    Print "Create/Verify second fulltext dm_user object failed."
+    DmExit(-1)
+Else
+    Print "Created/Verified second fulltext dm_user object successfully."
+End If
+
+'registering the events for the new user (dm_fulltext_index_user_01) based on the types registered for dm_fulltext_index_user
+queryString$ = "select distinct registered_id from dmi_registry where user_name = 'dm_fulltext_index_user' order by registered_id" 
+collection = dmAPIGet("query," & SessionID & "," & queryString)
+If collection = "" Then
+    Print "There is no type registered for dm_fulltext_index_user"
+    Exit Function
+End If
+status = dmAPIExec("next," & SessionID & "," & collection)
+If status = 0 Then
+   Exit Function
+End If
+typeId$ = dmAPIGet("get," & SessionID & "," & collection & ",registered_id")
+Do While Not (typeId$ = "" )
+    typeName1$ = dmAPIGet("get," & SessionID & "," & typeId & ",name")
+    status = DoRegister(SessionID, docbaseName, typeName1, regUserName)
+    If status <> 1 Then
+	Print "Register for type " & typeName1 & " and user " & _
+        regUserName  & " failed."
+	Exit Function
+    Else
+	Print "Successfully registered for type " & typeName1 & " and user " & _
+            regUserName  & "."
+    End If
+    collStatus = dmAPIExec("next," & SessionID & "," & collection)
+    If collStatus = 0 Then
+    	Goto Finish
+    End If
+    typeId$ = dmAPIGet("get," & SessionID & "," & collection & ",registered_id")
+Loop
+Finish:
+   collStatus = dmAPIExec("close," & SessionID & "," & collection)
+
+'create IA lock for different fulltext user.
+status = CreateIndexAgentAcquireLockForFTUser(SessionID, docbaseName,regUserName)
+If status <> 1 Then
+	Print "Create/Verify dm_sysobject dm_indexAgentAcquireLock_FTUser failed."
+	DmExit(-1)
+Else
+	Print regUserName & " create/verify dm_sysobject dm_indexAgentAcquireLock_FTUser succeeded."
+End If
+
+End Function
+
+Function CreateAcquireLockForFTUser(docbaseName As String, _
+									docbaseUserName As String, _
+									docbaseUserPassword As String, _
+									ftUserName As String)
+Dim SessionID As String
+Dim status As Integer
+
+    SessionID= dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+    If SessionID ="" Then
+        Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+        DmExit(-1)
+    Else
+        Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    End If
+
+	status = CreateIndexAgentAcquireLockForFTUser(SessionID, docbaseName,ftUserName)
+    If status <> 1 Then
+	Print "Create/Verify dm_sysobject dm_indexAgentAcquireLock_FTUser failed."
+	DmExit(-1)
+    Else
+	Print ftUserName & "create/verify dm_sysobject dm_indexAgentAcquireLock_FTUser succeeded."
+    End If
+End Function				   
+
+Function CreateIndexAgentAcquireLockForFTUser(SessionID As String, _
+                                     docbaseName as String, _
+									 userName As String ) as Integer
+  Dim status As Integer
+  Dim ticket As String
+  Dim SessionID2 As String
+  Dim buff As String
+  Dim domainName As String
+  Dim ObjectID As String
+  Dim errorMsg As String
+  Dim charIndex As Integer
+  Dim sErrMsg As String
+						
+  If (userName = "") Then
+	userName="dm_fulltext_index_user_01"
+	Print "user name: " &userName
+  End If
+  
+  buff = dmAPIGet("get,c,docbaseconfig,auth_protocol")
+  If (buff="domain_required") Then
+    buff ="retrieve,c,dm_user where user_name='" & userName & "'"
+    ObjectID=dmAPIGet(buff)
+    If ObjectID = "" Then
+        Print "Failed to retrieve fulltext user " & userName & "."
+        CreateIndexAgentAcquireLockForFTUser = 0
+        exit function
+    End If
+    domainName =dmAPIGet("get,c," & ObjectID & ",user_login_domain")
+	buff = "getlogin,c," & domainName & "\" & userName
+  Else
+    buff = "getlogin,c," & userName
+  End If									 
+  ticket=dmAPIGet(buff)
+  If ticket=""Then
+    Print "null ticket"
+    DmExit(1)
+  End If
+
+  buff = "connect," & docbaseName & "," & userName & "," & ticket
+  SessionID2= dmAPIGet(buff)
+  ObjectID = dmAPIGet("retrieve," & SessionID2 & ",dm_sysobject where object_name='dm_indexAgentAcquireLock_FTUser' and owner_name='" & userName & "'")
+  If ObjectID="" Then
+	sErrMsg = dmAPIGet("getmessage," & SessionID2)
+    Print "Creating sysobject 'dm_indexAgentAcquireLock_FTUser'"
+    ObjectID = dmAPIGet("create," & SessionID2 & ",dm_sysobject")
+    status=dmAPISet("set," & SessionID2 & ",l,object_name", "dm_indexAgentAcquireLock_FTUser")
+    status=dmAPISet("set," & SessionID2 & ",l,a_special_app", "1.0.0")
+    status=dmAPISet("set," & SessionID2 & ",l,acl_domain", "dm_dbo")
+    status=dmAPISet("set," & SessionID2 & ",l,acl_name", "dm_acl_superusers" )
+
+    status=dmAPIExec("save," & SessionID2 & ",l")
+    If status = 0 Then
+      Print dmAPIGet("getmessage," & SessionID2)
+      Print "Failed to create sysobject 'dm_indexAgentAcquireLock_FTUser'"
+      CreateIndexAgentAcquireLockForFTUser = 0
+      Exit Function
+    End If
+  Else
+    Print "Method 'dm_indexAgentAcquireLock_FTUser' with " & userName & " already exists"
+  End If
+
+  CreateIndexAgentAcquireLockForFTUser = 1  
+End Function
+
+'
+'  This function HACleanupBeforeUpgradeStep is ONLY needed for upgrading an
+'  existing HA installation (on 5.3 SP2 or 5.3 SP3).  If this is the first time that
+'  HA is being installed and configured, running this function is not necessary.
+'
+'  This function cleans up any dm_ftengine_config objects and any dm_fulltext_index
+'  objects from the repository.
+'
+Function HACleanupBeforeUpgradeStep(docbaseName As String, _
+                   docbaseUserName As String, _
+                   docbaseUserPassword As String)
+
+Dim session As String
+Dim status As Integer
+Dim result As String
+Dim objectIDs As String
+
+session = dmAPIGet("connect," & docbaseName & "," & docbaseUserName & "," & docbaseUserPassword)
+If session = "" Then
+    Print "Failed to connect to docbase " & docbaseName &" as user " & docbaseUserName &"."
+    DmExit(-1)
+Else
+    Print "Connected to docbase " & docbaseName &" as user " & docbaseUserName &"."
+End If
+
+objectIDs = GetResultsFromSelectQuery(session, "select r_object_id from dm_ftengine_config" )
+If objectIDs = "" Then
+  Print "Found no dm_fulltext_index objects to clean up."
+  Goto SecondCheck
+End If
+result = "F"
+buffer = "query," & session & ",delete dm_ftengine_config objects" &_
+         " where r_object_id in (" & objectIDs & ")"
+collection = dmAPIGet(buffer)
+If Not (collection = "") Then
+  status = dmAPIExec("next," & session & "," & collection)
+  If Not (status = 0) Then
+    result = dmAPIGet("get," & session & "," & collection & ",objects_deleted")
+  End If
+End If
+If Not (result = "0") Then
+  Print "Successfully deleted dm_ftengine_config objects: " & objectIDs
+Else
+  Print "ERROR! Failed to delete dm_ftengine_config objects: " & objectIDs & ".  Please delete manually."
+  Print "Use the following DQL call to delete: " & buffer
+End If
+
+SecondCheck:
+objectIDs = GetResultsFromSelectQuery(session, "select r_object_id from dm_fulltext_index" )
+If objectIDs = "" Then
+  Print "Found no dm_fulltext_index objects to clean up."
+  Goto ThirdCheck
+End If
+result = "F"
+buffer = "apply," & session & ",NULL,EXEC_SQL,QUERY,S,delete dm_fulltext_index_s"
+collection = dmAPIGet(buffer)
+If Not (collection = "") Then
+  status = dmAPIExec("next," & session & "," & collection)
+  If Not (status = 0) Then
+    result = dmAPIGet("get," & session & "," & collection & ",result")
+  End If
+End If
+If (result = "T") Then
+  Print "Successfully deleted dm_fulltext_index objects: " & objectIDs
+Else
+  Print "ERROR! Failed to delete dm_ftengine_config objects: " & objectIDs & ".  Please delete manually."
+  Print "Use the following apply call to delete: " & buffer
+End If
+
+ThirdCheck:
+objectIDs = GetResultsFromSelectQuery(session, "select r_object_id from dm_fulltext_collection" )
+If objectIDs = "" Then
+  Print "Found no dm_fulltext_collection objects to clean up."
+  Exit Function
+End If
+result = "F"
+buffer = "query," & session & ",delete dm_fulltext_collection objects"
+collection = dmAPIGet(buffer)
+If Not (collection = "") Then
+  status = dmAPIExec("next," & session & "," & collection)
+  If Not (status = 0) Then
+    result = dmAPIGet("get," & session & "," & collection & ",result")
+  End If
+End If
+If (result = "T") Then
+  Print "Successfully deleted dm_fulltext_index objects: " & objectIDs
+Else
+  Print "ERROR! Failed to delete dm_ftengine_config objects: " & objectIDs & ".  Please delete manually."
+  Print "Use the following apply call to delete: " & buffer
+End If
+
+End Function
+
+Function CreateVerifyFTCollectionType(session As String) As Integer
+Dim status As Integer
+Dim ObjectID As String
+Dim buff As String
+Dim QueryID As String
+
+buff = "retrieve,c,dm_type where name = 'dm_fulltext_collection'"
+ObjectID = dmAPIGet(buff)
+If ObjectID = "" Then
+    Print "Create dm_fulltext_collection type"
+
+    QueryID = dmAPIGet("query,c,CREATE TYPE dm_fulltext_collection (name char(64), " &_
+    "status integer, op_mode integer, index_root_location char(255), r_object_count double repeating, " &_
+    "r_partition_name char(255) repeating, r_creation_date date ) with supertype NULL")
+
+    If QueryID<>"" Then
+        status=dmAPIExec("close,c," & QueryID)
+    Else
+        Print dmAPIGet("getmessage,c")
+	    CreateVerifyFTCollectionType = 0
+	    Exit Function
+    End If
+Else
+   Print "dm_fulltext_collection type exists."
+End If
+
+   CreateVerifyFTCollectionType = 1
+End Function
