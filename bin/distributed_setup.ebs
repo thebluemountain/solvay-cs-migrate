@@ -31,6 +31,11 @@ Declare Sub check ( _
  ByVal newbrokerport As String, _
  ByVal cfgname As String)
 
+Declare Sub removeFAST ( _
+ ByVal server As String, _
+ ByVal loginname As String, _
+ ByVal pwd As String)
+
 Declare Sub prepareBroker (ByVal host As String, ByVal port As String)
 
 Declare Function connect ( _
@@ -91,6 +96,9 @@ Declare Sub checkACS (_
  ByVal port As String)
 
 Declare Sub printErr (ByVal message As String)
+Declare Sub printWarn (ByVal message As String)
+Declare Sub printInfo (ByVal message As String)
+Declare Sub printDebug (ByVal message As String)
 Declare Sub printLog (ByVal message As String)
 Declare Function getError (ByVal cnx As String) As String
 Declare Function isCommit As Boolean
@@ -113,6 +121,12 @@ Declare Sub checkedExec ( _
  ByVal cnx As String, _ 
  ByVal param As String, _
  ByVal errtitle As String)
+
+Declare Sub RemoveFASTIndexAgent ( _
+ ByVal cnx As String, _
+ ByVal id As String)
+Declare Sub RemoveFASTIndexEngines (ByVal cnx As String)
+Declare Sub RemoveFASTIndexAgents (ByVal cnx As String)
 
 Function getError (ByVal cnx As String) As String
     getError = dmAPIGet ("getmessage," & cnx & ",3")
@@ -326,19 +340,19 @@ Function getServer (_
   ' but also patches the app_server_uri for the app_server_name valued at 'do_method', 'do_mail' and 'do_bpm'
   index = checkedGet ("locate", cnx, id & ",app_server_name,do_method", "locating do_method index")
   If (-1 < index) Then
-   value = "http://" & host & ":" & jmsport & 9080 & "/DmMethods/servlet/DoMethod"
+   value = "http://" & host & ":" & jmsport & "/DmMethods/servlet/DoMethod"
    checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
     value , "cannot set address " & value & " for application do_method"
   End If
   index = checkedGet ("locate", cnx, id & ",app_server_name,do_mail", "locating do_mail index")
   If (-1 < index) Then
-   value = "http://" & host & ":" & jmsport & 9080 & "/DmMail/servlet/DoMail"
+   value = "http://" & host & ":" & jmsport & "/DmMail/servlet/DoMail"
    checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
     value , "cannot set address " & value & " for application do_mail"
   End If
   index = checkedGet ("locate", cnx, id & ",app_server_name,do_bpm", "locating do_bpm index")
   If (-1 < index) Then
-   value = "http://" & host & ":" & jmsport & 9080 & "/bpm/servlet/DoMethod"
+   value = "http://" & host & ":" & jmsport & "/bpm/servlet/DoMethod"
    checkedSet "set", cnx, id & ",app_server_uri[" & index & "]", _
     value , "cannot set address " & value & " for application do_bpm"
   End If
@@ -826,10 +840,125 @@ terminate:
  End If
 End Sub
 
+
+Sub RemoveFASTIndexAgent ( _
+ ByVal cnx As String, _         ' the connection to the server
+ ByVal id As String _           ' the index_agent to remove
+)
+ Dim iname As String             ' the name of the index
+ Dim col As String              ' the tmp collection
+ Dim srvid As String            ' the found server config id
+ Dim srvname As String            ' the found server config name
+ Dim index As String            ' the index
+ iname = checkedGet("get", cnx, id & ",object_name", "cannot get index agent name")
+
+ col = checkedGet("readquery", cnx, _
+  "SELECT r_object_id, object_name, (-i_position-1) AS index FROM dm_server_config " & _
+  "WHERE ANY app_server_name = '" & iname & "' ENABLE (ROW_BASED)", _
+  "cannot get serverconfig's id and positions")
+ While (dmAPIExec ("next," & cnx & "," & col))
+  srvid = checkedGet ("get", cnx, col & ",r_object_id", "cannot read id")
+  srvname = checkedGet ("get", cnx, col & ",object_name", "cannot read object name")
+  index = checkedGet ("get", cnx, col & ",index", "cannot index position")
+  ' OK: remove app_server_name and app_server_uri then
+  checkedExec "remove", cnx, srvid & ",app_server_name[" & index & "]", _
+   "cannot remove app name from server config"
+  checkedExec "remove", cnx, srvid & ",app_server_uri[" & index & "]", _
+   "cannot remove app name from server config"
+  checkedExec "save", cnx, srvid, "cannot save server config"
+  printLog "updated server config '" & srvname & "' (" & srvid & ") to remove reference to FAST agent config " & iname
+ WEnd
+
+ checkedExec "destroy", cnx, id, "cannot destroy FAST agent config " & iname
+ printLog "removed FAST agent config '" & iname & "' (" & id & ")"
+End Sub
+
+Sub RemoveFASTIndexEngines ( _ 
+ ByVal cnx As String _     ' the connection to the server
+)
+ Dim id As String       ' the FAST engine config id
+ Dim ename As String     ' the related name
+
+ id = checkedGet ("id", cnx, _
+  "dm_ftengine_config WHERE ANY (param_name = 'indexer_class_name' AND " & _ 
+  "param_value = 'com.documentum.server.impl.fulltext.indexagent.plugins.fast.FdsFTPlugin')", _
+  "cannot locate dm_ftengine_config")
+ While ("" <> id)
+  ename = checkedGet("get", cnx, id & ",object_name", "cannot read engine name")
+  checkedExec "destroy", cnx, id, "cannot destroy engine config '" & ename & "'"
+  printLog "removed FAST engine config '" & ename & "' (" & id & ")"
+  id = checkedGet ("id", cnx, _
+   "dm_ftengine_config WHERE ANY (param_name = 'indexer_class_name' AND " & _ 
+   "param_value = 'com.documentum.server.impl.fulltext.indexagent.plugins.fast.FdsFTPlugin')", _
+   "cannot locate dm_ftengine_config")
+ WEnd
+ printLog "processed FAST index engines cleanup"
+End Sub
+
+Sub RemoveFASTIndexAgents ( _ 
+ ByVal cnx As String _   ' the connection to the server
+)
+ Dim fastId As String
+
+ ' OK: get the next indexagent_config
+ fastId = checkedGet("id", cnx, "dm_ftindex_agent_config WHERE subject IS NULLSTRING", _
+  "cannot locate FAST index agent")
+ While ("" <> fastId)
+  removeFASTIndexAgent cnx, fastId
+  fastId = checkedGet("id", cnx, "dm_ftindex_agent_config WHERE subject IS NULLSTRING", _
+   "cannot locate FAST index agent")
+ WEnd
+ printLog "processed FAST index agents cleanup"
+End Sub
+
+Public Sub removeFAST ( _ 
+ ByVal server As String, _          ' the docbase name to connect to
+ ByVal loginname As String, _       ' the user to login with
+ ByVal pwd As String _               ' the password to use
+)
+ Dim cnx As String      ' the connection
+ Dim commit As Boolean
+
+ initLogLevel
+ commit = isCommit
+
+ On Error Goto terminate
+
+ ' first connect
+ cnx = connect (server, loginname, pwd)
+ If ("" = cnx) Then
+  Exit Sub
+ End If
+
+ checkedExec "begintran", cnx, "", "cannot begin transaction"
+
+ ' remove the FAST index agents
+ removeFASTIndexAgents cnx
+ removeFASTIndexEngines cnx
+
+ If (commit) Then
+  checkedExec "commit", cnx, "", "cannot commit transaction"
+ Else
+  checkedExec "abort", cnx, "", "cannot abort transaction"
+ End If
+
+terminate:
+ If ("" <> cnx) Then
+  If (Not disconnect(cnx)) Then
+   dmExit(1112)
+  End If
+ End If
+ If (0 <> Err) Then
+  ' another error occured then
+  printErr Err.Description & " (" & Err.Number & ")@" & Erl & ")"
+  dmExit(Err.number)
+ End If
+End Sub
+
 Public Sub Main
  Print "usage:"
- Print " -e: check|configure"
- Print " -p (parameters):"
+ Print " -e: check|configure|removeFAST"
+ Print " -p (parameters): (check,configure)"
  Print "  server: The name of the docbase to connect to"
  Print "  loginname: The name of the user to connect as"
  Print "  pwd: The password to use for the user"
@@ -840,6 +969,11 @@ Public Sub Main
  Print "  acsport: The port of the ACS to configure server for"
  Print "  newbrokerport: The port of the docbroker on supplied host to register JMS onto"
  Print "  cfgname: The server configuration name to check or configure"
+ Print ""
+ Print " -p (parameters): (removeFAST)"
+ Print "  server: The name of the docbase to connect to"
+ Print "  loginname: The name of the user to connect as"
+ Print "  pwd: The password to use for the user"
  Print ""
  Print "The following environment variables can be set:"
  Print " DS_COMMIT: if matching value 'false', the configure does not "
