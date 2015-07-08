@@ -172,6 +172,8 @@ function upgradeServer ($cfg)
     # make sure the service is started for the server
     Start-ContentServerServiceIf -Name $cfg.resolve('docbase.daemon.name')
 
+    # TODO: make sure the docbase has registered against current docbroker!
+    
     # ------------------- Perform CS upgrade to version 7.1 -------------------------------
     # Execute dmbasic script prior to installing DARs
     Start-DmbasicStep -cfg $cfg -step 'before'
@@ -258,7 +260,7 @@ function uninstallServer ($cfg)
     {       
         $hostname = $cfg.resolve('docbase.docbrokers.' + $i + '.host')
         $port = $cfg.resolve('docbase.docbrokers.' + $i + '.port')
-        try 
+        try
         {
             $broker = $cfg.resolve('env.DM_HOME') + '\bin\dmqdocbroker.bat'
             Start-Process -FilePath "$broker" -ArgumentList "-t $hostname -p $port -c deregister $docbasename" -NoNewWindow -Wait -ErrorAction stop
@@ -267,7 +269,7 @@ function uninstallServer ($cfg)
         catch 
         {
             Log-Warning "Failed to unregister docbase $docbasename from Docbroker $i host= $hostname port= $port - $($_.Exception.Message)"
-        }        
+        }
     }
 
     log-info "done uninstalling server $docbasename"
